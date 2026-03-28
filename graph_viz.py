@@ -3,7 +3,8 @@ graph_viz.py
 ============
 Self-contained graph visualization module for the music recommender system.
 
-Assumes a pickled _Graph object already exists on disk (built by a teammate).
+Accepts an already-loaded Graph object (from graph.py) — no pickle loading here.
+The caller is responsible for loading the pickle; just pass the Graph in.
 Provides a GraphVisualizer class that embeds an interactive matplotlib figure
 into any tk.Frame — pan, zoom, click nodes, highlight recommendations.
 
@@ -14,11 +15,15 @@ Usage (standalone test):
     python graph_viz.py
 
 Usage (inside the main UI):
+    import pickle
     from graph_viz import GraphVisualizer
+
+    with open("graph.pkl", "rb") as f:
+        graph = pickle.load(f)
 
     viz = GraphVisualizer(
         parent_frame=some_tk_frame,
-        pickle_path="graph.pkl",
+        graph=graph,
         sample_size=500,
         on_song_click=my_callback   # optional: fn(song_name, attrs_dict)
     )
@@ -31,7 +36,6 @@ Usage (inside the main UI):
 
 from __future__ import annotations
 
-import pickle
 import random
 import tkinter as tk
 from tkinter import ttk
@@ -122,8 +126,9 @@ class GraphVisualizer:
     ----------
     parent_frame : tk.Frame
         The Tkinter frame to embed everything into.
-    pickle_path : str
-        Path to the pickled _Graph object.
+    graph : Graph
+        An already-loaded Graph object from graph.py.
+        The caller loads the pickle; this class just uses the graph.
     sample_size : int
         Number of songs to display (default 500).
     on_song_click : callable, optional
@@ -134,17 +139,16 @@ class GraphVisualizer:
     def __init__(
         self,
         parent_frame: tk.Frame,
-        pickle_path: str,
+        graph,
         sample_size: int = 500,
         on_song_click: Optional[Callable[[str, dict], None]] = None,
     ) -> None:
         self.parent_frame   = parent_frame
-        self.pickle_path    = pickle_path
+        self._graph         = graph
         self.sample_size    = sample_size
         self.on_song_click  = on_song_click
 
         # Internal state
-        self._graph         = None   # the _Graph object from pickle
         self._nx_graph      = None   # networkx subgraph
         self._pos           = {}     # {node_name: (x, y)}
         self._sample_names  = []     # ordered list of song names in current sample
@@ -161,8 +165,7 @@ class GraphVisualizer:
         self.frame = tk.Frame(parent_frame, bg=BG_COLOR)
         self._build_ui()
 
-        # Load data and draw
-        self._load_graph()
+        # Sample songs and draw — no loading needed, graph is already here
         self._sample_and_build()
         self._draw()
 
@@ -242,23 +245,6 @@ class GraphVisualizer:
         # Connect click event
         self._cid = self._canvas.mpl_connect("pick_event", self._on_pick)
 
-    # ------------------------------------------------------------------
-    # Data loading
-    # ------------------------------------------------------------------
-
-    def _load_graph(self) -> None:
-        """Load the pre-built _Graph from the pickle file."""
-        try:
-            with open(self.pickle_path, "rb") as f:
-                self._graph = pickle.load(f)
-            print(f"[graph_viz] Loaded graph with "
-                  f"{len(self._graph._songs)} songs from '{self.pickle_path}'")
-        except FileNotFoundError:
-            raise FileNotFoundError(
-                f"[graph_viz] Pickle file '{self.pickle_path}' not found. "
-                "Make sure the graph has been built and pickled first."
-            )
-
     def _sample_and_build(self) -> None:
         """
         Randomly sample songs and build a NetworkX subgraph from them.
@@ -274,10 +260,10 @@ class GraphVisualizer:
 
         for name in self._sample_names:
             song = self._graph._songs[name]
-            for neighbour, dist in song.neighbours.items():
-                if neighbour.name in sample_set:
-                    if not G.has_edge(name, neighbour.name):
-                        G.add_edge(name, neighbour.name, weight=1.0 - dist)
+            for neighbour_name, dist in song.neighbours.items():
+                if neighbour_name in sample_set:
+                    if not G.has_edge(name, neighbour_name):
+                        G.add_edge(name, neighbour_name, weight=1.0 - dist)
 
         self._nx_graph = G
 
@@ -479,9 +465,9 @@ class GraphVisualizer:
             new_song = self._graph._songs[new]
             # Place it near one of its neighbours that's already visible
             placed = False
-            for nb, _ in new_song.neighbours.items():
-                if nb.name in self._pos:
-                    nx_pt, ny_pt = self._pos[nb.name]
+            for nb_name in new_song.neighbours:
+                if nb_name in self._pos:
+                    nx_pt, ny_pt = self._pos[nb_name]
                     self._pos[new] = (
                         nx_pt + random.uniform(-0.05, 0.05),
                         ny_pt + random.uniform(-0.05, 0.05),
@@ -491,9 +477,9 @@ class GraphVisualizer:
             if not placed:
                 self._pos[new] = (random.uniform(-1, 1), random.uniform(-1, 1))
 
-            for nb, dist in new_song.neighbours.items():
-                if nb.name in set(self._sample_names):
-                    self._nx_graph.add_edge(new, nb.name, weight=1.0 - dist)
+            for nb_name, dist in new_song.neighbours.items():
+                if nb_name in set(self._sample_names):
+                    self._nx_graph.add_edge(new, nb_name, weight=1.0 - dist)
 
         self._draw()
 
@@ -587,21 +573,42 @@ class GraphVisualizer:
 
 if __name__ == "__main__":
     import sys
+    # import pickle
+    import graph
 
-    PICKLE_PATH = "graph.pkl"   # change if your pickle has a different name
+    # PICKLE_PATH = "graph.pkl"
+    # Patch __main__ so pickle can find Graph and _Song when loading
+    import sys
+
+    sys.modules['__main__'].Graph = graph.Graph
+    sys.modules['__main__']._Song = graph._Song
+    Graph = graph.make_graph()
 
     root = tk.Tk()
     root.title("Music Graph Visualizer — Standalone Test")
     root.configure(bg=BG_COLOR)
     root.geometry("1200x720")
-
-    # ---- Status label while loading ----
+    """
+    # ---- Load the graph (pickle handled here, not inside GraphVisualizer) ----
     status = tk.Label(
         root, text="Loading graph from pickle…",
         font=("Courier New", 12), fg="#aaaaff", bg=BG_COLOR
     )
     status.pack(pady=20)
     root.update()
+
+    try:
+        with open(PICKLE_PATH, "rb") as f:
+            graph = pickle.load(f)
+        print(f"[graph_viz] Loaded {len(graph._songs)} songs from '{PICKLE_PATH}'")
+    except FileNotFoundError:
+        status.configure(
+            text=f"Pickle file '{PICKLE_PATH}' not found. Run graph.py first.",
+            fg="#ff6666"
+        )
+        root.mainloop()
+        sys.exit(1)
+    """
 
     # ---- Build the visualizer ----
     container = tk.Frame(root, bg=BG_COLOR)
@@ -612,18 +619,14 @@ if __name__ == "__main__":
         for k, v in attrs.items():
             print(f"  {k}: {v}")
 
-    try:
-        viz = GraphVisualizer(
-            parent_frame=container,
-            pickle_path=PICKLE_PATH,
-            sample_size=500,
-            on_song_click=on_click,
-        )
-        viz.frame.pack(fill="both", expand=True)
-        status.destroy()
-    except FileNotFoundError as e:
-        status.configure(text=str(e), fg="#ff6666")
-        print(e, file=sys.stderr)
+    viz = GraphVisualizer(
+        parent_frame=container,
+        graph=Graph,
+        sample_size=500,
+        on_song_click=on_click,
+    )
+    viz.frame.pack(fill="both", expand=True)
+    # status.destroy()
 
     # ---- Demo buttons ----
     btn_frame = tk.Frame(root, bg=BG_COLOR)
@@ -664,7 +667,6 @@ if __name__ == "__main__":
     tk.Button(btn_frame, text="🔎  Demo Search 'love'",
               command=demo_search, **style_btn).pack(side="left", padx=4)
     tk.Button(btn_frame, text="✕  Clear Highlights",
-              command=viz.clear_highlights if 'viz' in dir() else lambda: None,
-              **style_btn).pack(side="left", padx=4)
+              command=viz.clear_highlights, **style_btn).pack(side="left", padx=4)
 
     root.mainloop()

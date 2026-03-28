@@ -212,7 +212,7 @@ class Graph:
         print("Pickled!")
 
 
-if __name__ == '__main__':
+def make_graph() -> Graph:
     if os.path.exists("graph.pkl"):
         print("Pickle found. Loading...")
         with open("graph.pkl", 'rb') as file:
@@ -223,3 +223,9 @@ if __name__ == '__main__':
         print("Pickle not found. Generating new graph.")
         graph = Graph("spotify_10k.csv", 0.5)
         print("Graph generated!")
+
+    return graph
+
+
+if __name__ == '__main__':
+    print("damn")
