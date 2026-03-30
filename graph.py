@@ -4,7 +4,7 @@ from collections import deque, Counter
 from typing import Any
 import math
 import itertools
-import pickle
+import struct
 import os
 
 PARENT_GENRE_MAPPING = {
@@ -66,7 +66,7 @@ class _Song:
 
     def __init__(self, artist, name, popularity, year, genre, dance, energy, key, loud, mode, speech, acoustic,
                  instrument, live, valence, tempo, duration, time_signature):
-        self.name = name
+        self.name = f"{name} - {artist}"
         self.artist = artist
         self.popularity = float(popularity)
         self.year = float(year)
@@ -128,7 +128,7 @@ class Graph:
     parent_genres: list[str]
     threshold: float
 
-    def __init__(self, dataset: str, threshold: float):
+    def __init__(self, dataset: str, threshold: float, build_edges: bool = True):
         self._songs = {}
         self._year_range = []
         self._key_range = []
@@ -144,8 +144,10 @@ class Graph:
         ]
 
         self._load_songs(dataset)
-        self._make_connections()
-        self._save_state()
+
+        if build_edges:
+            self._make_connections()
+            self._save_state()
 
     def _load_songs(self, dataset: str):
         years = []
@@ -162,15 +164,14 @@ class Graph:
             for song_data in reader:
                 song_data.pop(0)
                 song_data.pop(2)
-                # Popularity is conveniently normalized from 0.0 to 1.0 right here!
                 song_data[2] = float(song_data[2]) / 100
 
                 original_genre = song_data[4]
                 song_data[4] = PARENT_GENRE_MAPPING.get(original_genre, "Mood/Other")
 
-                self._songs[song_data[1]] = _Song(*song_data)
-                curr_song = self._songs[song_data[1]]
-                self.genres.add(curr_song.genre)
+                new_song = _Song(*song_data)
+                self._songs[new_song.name] = new_song
+                curr_song = self._songs[new_song.name]
 
                 years.append(curr_song.year)
                 keys.append(curr_song.key)
@@ -190,12 +191,10 @@ class Graph:
             self._process_song_data(song)
 
     def _make_connections(self):
-        # Optimization: Calculate the squared threshold once
         threshold_sq = self.threshold ** 2
 
         for song1, song2 in itertools.combinations(list(self._songs.values()), 2):
             dist_sq = _calculate_song_distance_sq(song1, song2)
-
             if dist_sq < threshold_sq:
                 exact_dist = math.sqrt(dist_sq)
                 song1.neighbours[song2.name] = exact_dist
@@ -210,11 +209,28 @@ class Graph:
         song.time_signature = normalize(song.time_signature, self._time_sig_range)
 
     def _save_state(self) -> None:
-        print("Pickling...")
-        with open("graph.pkl", 'wb') as file:
-            # type: ignore
-            pickle.dump(self, file)
-        print("Pickled!")
+        song_names = list(self._songs.keys())
+        name_to_idx = {name: i for i, name in enumerate(song_names)}
+
+        with open("graph.bin", "wb") as f:
+            for i, name in enumerate(song_names):
+                song = self._songs[name]
+                for neighbor, dist in song.neighbours.items():
+                    if name < neighbor:
+                        binary_data = struct.pack('iif', i, name_to_idx[neighbor], dist)
+                        f.write(binary_data)
+
+    def load_save(self):
+        song_names = list(self._songs.keys())
+        edge_size = struct.calcsize('iif')
+
+        with open("graph.bin", "rb") as f:
+            while chunk := f.read(edge_size):
+                u_idx, v_idx, dist = struct.unpack('iif', chunk)
+                u_name, v_name = song_names[u_idx], song_names[v_idx]
+
+                self._songs[u_name].neighbours[v_name] = dist
+                self._songs[v_name].neighbours[u_name] = dist
 
     def add_song(self, song: _Song) -> None:
         self._process_song_data(song)
@@ -294,29 +310,26 @@ class Graph:
 
 
 def make_graph() -> Graph:
-    if os.path.exists("graph.pkl"):
-        print("Pickle found. Loading...")
-        with open("graph.pkl", 'rb') as file:
-            graph = pickle.load(file)
-        print("Pickle loaded!")
+    dataset_file = "spotify_15k.csv"
+    threshold = 0.75
 
+    if os.path.exists("graph.bin"):
+        print("Found save")
+        graph = Graph(dataset_file, threshold, build_edges=False)
+        graph.load_save()
     else:
-        print("Pickle not found. Generating new graph...")
-        graph = Graph("spotify_50k.csv", 1.5)
-        print("Graph generated!")
+        print("Binary file not found. Generating new graph.")
+        graph = Graph(dataset_file, threshold)
+        print("Graph generated and saved!")
 
     return graph
 
 
 if __name__ == "__main__":
     graph = make_graph()
+    song = graph.get_song("Life In a Glasshouse - Radiohead")
 
-    target_song_name = "Life In a Glasshouse"
-    song = graph.get_song(target_song_name)
+    recs = graph.recommend([song], 10)
 
-    if song:
-        recs = graph.recommend([song], 10)
-
-        print(f"Found {len(recs)} recommendations:\n")
-        for i, (dist, rec_song) in enumerate(recs, 1):
-            print(f"{i}. {rec_song.name} by {rec_song.artist} (Distance: {dist:.4f})")
+    for song in recs:
+        print(song[1].name)
