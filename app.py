@@ -1,195 +1,185 @@
-import graph
-import pickle
 import sys
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 
-Graph = graph.Graph
-_Song = graph._Song
-sys.modules["__main__"].Graph = graph.Graph
-sys.modules["__main__"]._Song = graph._Song
+import graph
+from graph_viz import GraphVisualizer, BG_COLOR
 
-class MusicApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Music Graph Browser")
-        self.root.geometry("900x600")
 
-        self.graph = None
-        self.current_song_names = []
+def get_recommendations(music_graph, seed_names, max_results):
+    """
+    recommend songs that are neighbours of any seed song.
+    Closer neighbours (smaller distance) are preferred.
+    """
+    best_distance = {}
 
-        self.load_graph()
-        self.make_widgets()
-        self.fill_song_list("")
+    for seed in seed_names:
+        if seed not in music_graph._songs:
+            continue
+        song = music_graph._songs[seed]
+        for neighbour_name, dist in song.neighbours.items():
+            if neighbour_name in seed_names:
+                continue
+            if neighbour_name not in best_distance or dist < best_distance[neighbour_name]:
+                best_distance[neighbour_name] = dist
 
-    def load_graph(self):
-        try:
-            with open("graph.pkl", "rb") as file:
-                self.graph = pickle.load(file)
-        except FileNotFoundError:
-            messagebox.showerror("Error", "graph.pkl was not found.")
-            self.root.destroy()
-        except Exception as error:
-            messagebox.showerror("Error", f"Could not load graph.pkl\n\n{error}")
-            self.root.destroy()
+    sorted_names = sorted(best_distance.keys(), key=lambda n: best_distance[n])
+    return sorted_names[:max_results]
 
-    def make_widgets(self):
-        top_frame = tk.Frame(self.root)
-        top_frame.pack(fill="x", padx=10, pady=10)
 
-        search_label = tk.Label(top_frame, text="Search by song or artist:")
-        search_label.pack(side="left")
+def main():
+    # helps pickle.load find Graph / _Song if loading an old pickle
+    sys.modules["__main__"].Graph = graph.Graph
+    sys.modules["__main__"]._Song = graph._Song
 
-        self.search_entry = tk.Entry(top_frame, width=40)
-        self.search_entry.pack(side="left", padx=10)
-        self.search_entry.bind("<KeyRelease>", self.search_songs)
+    music_graph = graph.make_graph()
 
-        clear_button = tk.Button(top_frame, text="Clear", command=self.clear_search)
-        clear_button.pack(side="left")
+    root = tk.Tk()
+    root.title("Music recommender — graph view")
+    root.configure(bg=BG_COLOR)
+    root.geometry("1280x800")
 
-        main_frame = tk.Frame(self.root)
-        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+    # --- Top: search and lists ---
+    top = tk.Frame(root, bg=BG_COLOR)
+    top.pack(side="top", fill="x", padx=8, pady=6)
 
-        left_frame = tk.Frame(main_frame)
-        left_frame.pack(side="left", fill="y")
+    tk.Label(top, text="Search song or artist:", fg="#e0e0e0", bg=BG_COLOR).pack(anchor="w")
 
-        song_label = tk.Label(left_frame, text="Songs")
-        song_label.pack()
+    search_row = tk.Frame(top, bg=BG_COLOR)
+    search_row.pack(fill="x", pady=2)
 
-        self.song_listbox = tk.Listbox(left_frame, width=40, height=25)
-        self.song_listbox.pack(side="left", fill="y")
-        self.song_listbox.bind("<<ListboxSelect>>", self.show_selected_song)
+    search_var = tk.StringVar()
+    search_entry = tk.Entry(search_row, textvariable=search_var, width=45, font=("Arial", 10))
+    search_entry.pack(side="left", padx=(0, 8))
 
-        song_scrollbar = tk.Scrollbar(left_frame, orient="vertical")
-        song_scrollbar.pack(side="left", fill="y")
+    lists_row = tk.Frame(top, bg=BG_COLOR)
+    lists_row.pack(fill="x", pady=6)
 
-        self.song_listbox.config(yscrollcommand=song_scrollbar.set)
-        song_scrollbar.config(command=self.song_listbox.yview)
+    left_col = tk.Frame(lists_row, bg=BG_COLOR)
+    left_col.pack(side="left", fill="both", expand=True, padx=(0, 8))
+    tk.Label(left_col, text="Search results", fg="#aaaaaa", bg=BG_COLOR).pack(anchor="w")
 
-        right_frame = tk.Frame(main_frame)
-        right_frame.pack(side="left", fill="both", expand=True, padx=(20, 0))
+    results_scroll = tk.Scrollbar(left_col)
+    results_scroll.pack(side="right", fill="y")
+    results_box = tk.Listbox(
+        left_col, height=6, font=("Arial", 9),
+        yscrollcommand=results_scroll.set, selectmode=tk.SINGLE
+    )
+    results_box.pack(side="left", fill="both", expand=True)
+    results_scroll.config(command=results_box.yview)
 
-        details_label = tk.Label(right_frame, text="Song Details")
-        details_label.pack(anchor="w")
+    right_col = tk.Frame(lists_row, bg=BG_COLOR)
+    right_col.pack(side="left", fill="both", expand=True)
+    tk.Label(right_col, text="Seed songs (used for recommendations)", fg="#aaaaaa", bg=BG_COLOR).pack(anchor="w")
 
-        self.details_text = tk.Text(right_frame, width=60, height=18)
-        self.details_text.pack(fill="both", expand=False)
-        self.details_text.config(state="disabled")
+    seeds_scroll = tk.Scrollbar(right_col)
+    seeds_scroll.pack(side="right", fill="y")
+    seeds_box = tk.Listbox(
+        right_col, height=6, font=("Arial", 9),
+        yscrollcommand=seeds_scroll.set, selectmode=tk.SINGLE
+    )
+    seeds_box.pack(side="left", fill="both", expand=True)
+    seeds_scroll.config(command=seeds_box.yview)
 
-        neighbours_label = tk.Label(right_frame, text="Closest Neighbours")
-        neighbours_label.pack(anchor="w", pady=(15, 0))
+    search_results = []  # same order as results_box lines
 
-        self.neighbour_listbox = tk.Listbox(right_frame, width=60, height=12)
-        self.neighbour_listbox.pack(fill="both", expand=True)
-        self.neighbour_listbox.bind("<Double-Button-1>", self.open_neighbour)
-
-        open_button = tk.Button(
-            right_frame,
-            text="Open Selected Neighbour",
-            command=self.open_neighbour
-        )
-        open_button.pack(anchor="w", pady=8)
-
-    def clear_search(self):
-        self.search_entry.delete(0, tk.END)
-        self.fill_song_list("")
-
-    def search_songs(self, event=None):
-        text = self.search_entry.get().strip().lower()
-        self.fill_song_list(text)
-
-    def fill_song_list(self, text):
-        self.song_listbox.delete(0, tk.END)
-        self.current_song_names = []
-
-        all_song_names = sorted(self.graph._songs.keys())
-
-        for song_name in all_song_names:
-            song = self.graph._songs[song_name]
-
-            song_name_text = song.name.lower()
-            artist_text = song.artist.lower()
-
-            if text == "" or text in song_name_text or text in artist_text:
-                display_text = f"{song.name} - {song.artist}"
-                self.song_listbox.insert(tk.END, display_text)
-                self.current_song_names.append(song_name)
-
-    def show_selected_song(self, event=None):
-        selection = self.song_listbox.curselection()
-
-        if not selection:
+    def run_search():
+        results_box.delete(0, tk.END)
+        search_results.clear()
+        query = search_var.get().strip()
+        if not query:
             return
-
-        index = selection[0]
-        song_name = self.current_song_names[index]
-        song = self.graph._songs[song_name]
-
-        details = ""
-        details += f"Name: {song.name}\n"
-        details += f"Artist: {song.artist}\n"
-        details += f"Genre: {song.genre}\n"
-        details += f"Popularity: {song.popularity:.3f}\n"
-        details += f"Year: {song.year:.3f}\n"
-        details += f"Dance: {song.dance:.3f}\n"
-        details += f"Energy: {song.energy:.3f}\n"
-        details += f"Key: {song.key:.3f}\n"
-        details += f"Loudness: {song.loud:.3f}\n"
-        details += f"Mode: {song.mode:.3f}\n"
-        details += f"Speech: {song.speech:.3f}\n"
-        details += f"Acoustic: {song.acoustic:.3f}\n"
-        details += f"Instrumental: {song.instrument:.3f}\n"
-        details += f"Live: {song.live:.3f}\n"
-        details += f"Valence: {song.valence:.3f}\n"
-        details += f"Tempo: {song.tempo:.3f}\n"
-        details += f"Duration: {song.duration:.3f}\n"
-        details += f"Time Signature: {song.time_signature:.3f}\n"
-        details += f"Number of neighbours: {len(song.neighbours)}\n"
-
-        self.details_text.config(state="normal")
-        self.details_text.delete("1.0", tk.END)
-        self.details_text.insert("1.0", details)
-        self.details_text.config(state="disabled")
-
-        self.neighbour_listbox.delete(0, tk.END)
-
-        neighbour_items = list(song.neighbours.items())
-        neighbour_items.sort(key=lambda item: item[1])
-
-        limit = 20
-        count = 0
-
-        for neighbour_name, distance in neighbour_items:
-            line = f"{neighbour_name}    distance = {distance:.3f}"
-            self.neighbour_listbox.insert(tk.END, line)
-            count += 1
-
-            if count >= limit:
+        found = []
+        q = query.lower()
+        for name, song in music_graph._songs.items():
+            if q in name.lower() or q in song.artist.lower():
+                found.append(name)
+            if len(found) >= 20:
                 break
+        if not found:
+            messagebox.showinfo("Search", "No songs matched. Try different words.")
+            return
+        search_results.extend(found)
+        for name in found:
+            results_box.insert(tk.END, name)
 
-    def open_neighbour(self, event=None):
-        selection = self.neighbour_listbox.curselection()
+    def add_seed():
+        sel = results_box.curselection()
+        if not sel:
+            messagebox.showinfo("Seeds", "Select a song in Search results first.")
+            return
+        song_name = search_results[sel[0]]
+        current = list(seeds_box.get(0, tk.END))
+        if song_name in current:
+            messagebox.showinfo("Seeds", "That song is already a seed.")
+            return
+        seeds_box.insert(tk.END, song_name)
 
-        if not selection:
+    def remove_seed():
+        sel = seeds_box.curselection()
+        if not sel:
+            messagebox.showinfo("Seeds", "Select a seed to remove.")
+            return
+        seeds_box.delete(sel[0])
+
+    search_entry.bind("<Return>", lambda e: run_search())
+
+    tk.Button(search_row, text="Search", command=run_search, width=10).pack(side="left")
+
+    btn_row = tk.Frame(top, bg=BG_COLOR)
+    btn_row.pack(fill="x", pady=4)
+
+    tk.Label(btn_row, text="Number of recommendations:", fg="#e0e0e0", bg=BG_COLOR).pack(side="left")
+    count_var = tk.StringVar(value="15")
+    tk.Entry(btn_row, textvariable=count_var, width=5).pack(side="left", padx=6)
+
+    # Graph + visualizer (created before button commands that use viz)
+    graph_frame = tk.Frame(root, bg=BG_COLOR)
+    graph_frame.pack(side="top", fill="both", expand=True, padx=8, pady=(0, 8))
+
+    def on_song_click(song_name, attrs):
+        pass  # Details already show inside GraphVisualizer
+
+    viz = GraphVisualizer(
+        parent_frame=graph_frame,
+        graph=music_graph,
+        sample_size=500,
+        on_song_click=on_song_click,
+    )
+    viz.frame.pack(fill="both", expand=True)
+
+    def do_recommendations():
+        seeds = list(seeds_box.get(0, tk.END))
+        if not seeds:
+            messagebox.showinfo("Recommendations", "Add at least one seed song.")
+            return
+        try:
+            n = int(count_var.get().strip())
+            if n < 1:
+                raise ValueError()
+        except ValueError:
+            messagebox.showerror("Recommendations", "Enter a positive whole number.")
             return
 
-        line = self.neighbour_listbox.get(selection[0])
+        recs = get_recommendations(music_graph, seeds, n)
+        if not recs:
+            messagebox.showinfo(
+                "Recommendations",
+                "No neighbours found for these seeds in the graph (try other seeds).",
+            )
+            return
 
-        parts = line.split("    distance = ")
-        neighbour_name = parts[0]
+        viz.highlight_songs(recs, seed_songs=list(seeds))
+        if recs:
+            viz.focus_on_song(recs[0])
 
-        self.search_entry.delete(0, tk.END)
-        self.fill_song_list("")
+    tk.Button(btn_row, text="Add as seed", command=add_seed).pack(side="left", padx=(20, 4))
+    tk.Button(btn_row, text="Remove seed", command=remove_seed).pack(side="left", padx=4)
+    tk.Button(btn_row, text="Get recommendations", command=do_recommendations).pack(side="left", padx=12)
+    tk.Button(btn_row, text="Clear graph highlights", command=viz.clear_highlights).pack(side="left", padx=4)
 
-        if neighbour_name in self.current_song_names:
-            index = self.current_song_names.index(neighbour_name)
-            self.song_listbox.selection_clear(0, tk.END)
-            self.song_listbox.selection_set(index)
-            self.song_listbox.activate(index)
-            self.song_listbox.see(index)
-            self.show_selected_song()
+    root.mainloop()
 
 
-root = tk.Tk()
-app = MusicApp(root)
-root.mainloop()
+if __name__ == "__main__":
+    main()
