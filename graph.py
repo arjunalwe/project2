@@ -181,13 +181,10 @@ class Graph:
             self._process_song_data(song)
 
     def _make_connections(self):
-        songs_list = list(self._songs.values())
-        threshold_sq = self.threshold ** 2
-
-        for song1, song2 in itertools.combinations(songs_list, 2):
+        for song1, song2 in itertools.combinations(list(self._songs.values()), 2):
             dist_sq = _calculate_song_distance_sq(song1, song2)
 
-            if dist_sq < threshold_sq:
+            if dist_sq < self.threshold ** 2:
                 exact_dist = math.sqrt(dist_sq)
                 song1.neighbours[song2.name] = exact_dist
                 song2.neighbours[song1.name] = exact_dist
@@ -210,6 +207,20 @@ class Graph:
         finally:
             sys.setrecursionlimit(original_limit)
         print("Pickled!")
+
+    def add_song(self, song: _Song) -> None:
+        for i in list(self._songs.values()):
+            dist_sq = _calculate_song_distance_sq(song, i)
+
+            if dist_sq < self.threshold ** 2:
+                exact_dist = math.sqrt(dist_sq)
+                song.neighbours[i.name] = exact_dist
+                i.neighbours[song.name] = exact_dist
+
+        self._songs[song.name] = song
+
+    def find_songs(self, songs: list[_Song], num_songs: int) -> set[_Song]:
+
 
 
 def make_graph() -> Graph:
