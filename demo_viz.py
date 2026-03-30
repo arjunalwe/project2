@@ -16,7 +16,7 @@ What it does:
     5. Launches GraphVisualizer with that pickle
 
 Once the real graph.pkl is ready from your teammate, just run
-graph_viz.py instead — demo_viz.py is only for testing.
+graph_viz.py instead — demo_viz.py is only for testin
 """
 
 from __future__ import annotations

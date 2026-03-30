@@ -25,7 +25,7 @@ Usage (inside the main UI):
         parent_frame=some_tk_frame,
         graph=graph,
         sample_size=500,
-        on_song_click=my_callback   # optional: fn(song_name, attrs_dict)
+        on_song_click=my_callback   optional: fn(song_name, attrs_dict)
     )
     viz.frame.pack(fill="both", expand=True)
 

@@ -225,7 +225,3 @@ def make_graph() -> Graph:
         print("Graph generated!")
 
     return graph
-
-
-if __name__ == '__main__':
-    print("damn")
