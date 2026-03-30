@@ -1,11 +1,11 @@
 from __future__ import annotations
 import csv
+from collections import deque, Counter
 from typing import Any
 import math
 import itertools
 import pickle
 import os
-import sys
 
 PARENT_GENRE_MAPPING = {
     'pop': 'Pop', 'indie-pop': 'Pop', 'power-pop': 'Pop', 'k-pop': 'Pop',
@@ -86,10 +86,18 @@ class _Song:
         self.time_signature = float(time_signature)
         self.neighbours = {}
 
+    def get_features(self) -> list[float]:
+        return [
+            self.popularity, self.year, self.dance, self.energy, self.key, self.loud,
+            self.mode, self.speech, self.acoustic, self.instrument,
+            self.live, self.valence, self.tempo, self.duration, self.time_signature
+        ]
+
 
 def _calculate_song_distance_sq(song1: _Song, song2: _Song) -> float:
     genre_dist_sq = 0.0 if song1.genre == song2.genre else 1.0
     return (
+            (song1.popularity - song2.popularity) ** 2 +
             (song1.year - song2.year) ** 2 +
             (song1.key - song2.key) ** 2 +
             (song1.loud - song2.loud) ** 2 +
@@ -154,6 +162,7 @@ class Graph:
             for song_data in reader:
                 song_data.pop(0)
                 song_data.pop(2)
+                # Popularity is conveniently normalized from 0.0 to 1.0 right here!
                 song_data[2] = float(song_data[2]) / 100
 
                 original_genre = song_data[4]
@@ -181,10 +190,10 @@ class Graph:
             self._process_song_data(song)
 
     def _make_connections(self):
-        songs_list = list(self._songs.values())
+        # Optimization: Calculate the squared threshold once
         threshold_sq = self.threshold ** 2
 
-        for song1, song2 in itertools.combinations(songs_list, 2):
+        for song1, song2 in itertools.combinations(list(self._songs.values()), 2):
             dist_sq = _calculate_song_distance_sq(song1, song2)
 
             if dist_sq < threshold_sq:
@@ -202,14 +211,86 @@ class Graph:
 
     def _save_state(self) -> None:
         print("Pickling...")
-        original_limit = sys.getrecursionlimit()
-        sys.setrecursionlimit(100000000)
-        try:
-            with open("graph.pkl", 'wb') as file:
-                pickle.dump(self, file)
-        finally:
-            sys.setrecursionlimit(original_limit)
+        with open("graph.pkl", 'wb') as file:
+            # type: ignore
+            pickle.dump(self, file)
         print("Pickled!")
+
+    def add_song(self, song: _Song) -> None:
+        self._process_song_data(song)
+
+        threshold_sq = self.threshold ** 2
+
+        for i in self._songs.values():
+            dist_sq = _calculate_song_distance_sq(song, i)
+
+            if dist_sq < threshold_sq:
+                exact_dist = math.sqrt(dist_sq)
+                song.neighbours[i.name] = exact_dist
+                i.neighbours[song.name] = exact_dist
+
+        self._songs[song.name] = song
+
+    def recommend(self, songs: list[_Song], num_req: int = 10) -> list[tuple[float, _Song]]:
+        if not songs:
+            return []
+
+        num_seeds = len(songs)
+
+        genres = [song.genre for song in songs]
+        most_common_genre = Counter(genres).most_common(1)[0][0]
+
+        seed_features = [song.get_features() for song in songs]
+
+        avg_features = [sum(col) / num_seeds for col in zip(*seed_features)]
+
+        avg_song = _Song(
+            "Master", "Centroid",
+            avg_features[0],
+            avg_features[1],
+            most_common_genre,
+            *avg_features[2:]
+        )
+
+        queue = deque([(seed.name, 0) for seed in songs])
+        visited = set(seed.name for seed in songs)
+
+        candidates = []
+        curr_depth = 0
+        threshold_sq = self.threshold ** 2
+
+        while queue:
+            curr_name, depth = queue.popleft()
+
+            if depth > curr_depth:
+                if len(candidates) >= num_req:
+                    break
+                curr_depth = depth
+
+            curr_song = self._songs[curr_name]
+
+            for neighbor_name in curr_song.neighbours:
+                if neighbor_name not in visited:
+                    visited.add(neighbor_name)
+                    queue.append((neighbor_name, depth + 1))
+
+                    neighbor_song = self._songs[neighbor_name]
+
+                    dist_sq = _calculate_song_distance_sq(avg_song, neighbor_song)
+
+                    if dist_sq < threshold_sq:
+                        candidates.append((dist_sq, neighbor_song))
+
+        candidates.sort(key=lambda x: x[0])
+
+        top_matches = []
+        for dist_sq, song in candidates[:num_req]:
+            top_matches.append((math.sqrt(dist_sq), song))
+
+        return top_matches
+
+    def get_song(self, name: str) -> _Song | None:
+        return self._songs.get(name)
 
 
 def make_graph() -> Graph:
@@ -220,8 +301,22 @@ def make_graph() -> Graph:
         print("Pickle loaded!")
 
     else:
-        print("Pickle not found. Generating new graph.")
-        graph = Graph("spotify_10k.csv", 0.5)
+        print("Pickle not found. Generating new graph...")
+        graph = Graph("spotify_50k.csv", 1.5)
         print("Graph generated!")
 
     return graph
+
+
+if __name__ == "__main__":
+    graph = make_graph()
+
+    target_song_name = "Life In a Glasshouse"
+    song = graph.get_song(target_song_name)
+
+    if song:
+        recs = graph.recommend([song], 10)
+
+        print(f"Found {len(recs)} recommendations:\n")
+        for i, (dist, rec_song) in enumerate(recs, 1):
+            print(f"{i}. {rec_song.name} by {rec_song.artist} (Distance: {dist:.4f})")
