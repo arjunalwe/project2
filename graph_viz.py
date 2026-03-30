@@ -36,9 +36,9 @@ Usage (inside the main UI):
 
 from __future__ import annotations
 
+import graph
 import random
 import tkinter as tk
-from tkinter import ttk
 from typing import Callable, Optional
 
 import networkx as nx
@@ -49,9 +49,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 
 matplotlib.use("TkAgg")
 
-# ---------------------------------------------------------------------------
-# Colour palette — one colour per parent genre
-# ---------------------------------------------------------------------------
+# COLOUR PALETTE
 GENRE_COLORS: dict[str, str] = {
     "Pop":                "#E91E8C",
     "Rock":               "#FF6B35",
@@ -64,46 +62,46 @@ GENRE_COLORS: dict[str, str] = {
     "World/Regional":     "#E74C3C",
     "Mood/Other":         "#90A4AE",
 }
-DEFAULT_NODE_COLOR   = "#90A4AE"
-HIGHLIGHT_COLOR      = "#FFD700"   # gold  — recommended songs
-SEED_COLOR           = "#FF4500"   # red-orange — seed songs
-EDGE_COLOR           = "#555577"
-BG_COLOR             = "#0d0d0d"
-AXES_BG_COLOR        = "#111111"
-ANNOTATION_BG        = "#1a1a2e"
-ANNOTATION_FG        = "#e0e0e0"
+DEFAULT_NODE_COLOR = "#90A4AE"
+HIGHLIGHT_COLOR = "#FFD700"   # gold -> recommended songs
+SEED_COLOR = "#FF4500"        # red-orange -> seed songs
+EDGE_COLOR = "#555577"
+BG_COLOR = "#0d0d0d"
+AXES_BG_COLOR = "#111111"
+ANNOTATION_BG = "#1a1a2e"
+ANNOTATION_FG = "#e0e0e0"
 
-NODE_SIZE_DEFAULT    = 40
-NODE_SIZE_HIGHLIGHT  = 120
-NODE_ALPHA           = 0.85
+NODE_SIZE_DEFAULT = 40
+NODE_SIZE_HIGHLIGHT = 120
+NODE_ALPHA = 0.85
 
 
-# ---------------------------------------------------------------------------
-# Attribute display names — human-readable labels for the sidebar/annotation
-# ---------------------------------------------------------------------------
+# ATTRIBUTE DISPLAY NAMES
 ATTR_LABELS: dict[str, str] = {
-    "artist":         "Artist",
-    "genre":          "Genre",
-    "year":           "Year (normalised)",
-    "popularity":     "Popularity",
-    "dance":          "Danceability",
-    "energy":         "Energy",
-    "key":            "Key (normalised)",
-    "loud":           "Loudness (normalised)",
-    "mode":           "Mode",
-    "speech":         "Speechiness",
-    "acoustic":       "Acousticness",
-    "instrument":     "Instrumentalness",
-    "live":           "Liveness",
-    "valence":        "Valence",
-    "tempo":          "Tempo (normalised)",
-    "duration":       "Duration (normalised)",
-    "time_signature": "Time Signature (normalised)",
+    "artist": "Artist",
+    "genre": "Genre",
+    "year": "Year (normalized)",
+    "popularity": "Popularity",
+    "dance": "Danceability",
+    "energy": "Energy",
+    "key": "Key (normalized)",
+    "loud": "Loudness (normalized)",
+    "mode": "Mode",
+    "speech": "Speechiness",
+    "acoustic": "Acousticness",
+    "instrument": "Instrumentalness",
+    "live": "Liveness",
+    "valence": "Valence",
+    "tempo": "Tempo (normalized)",
+    "duration": "Duration (normalized)",
+    "time_signature": "Time Signature (normalized)",
 }
 
 
 def _song_to_attrs(song) -> dict[str, str]:
-    """Convert a _Song object to a plain dict of display-ready attribute strings."""
+    """
+    Returns a dictionary mapping of the song object's attributes and its corresponding (normalized) values
+    """
     attrs = {}
     for attr, label in ATTR_LABELS.items():
         val = getattr(song, attr, "N/A")
@@ -114,10 +112,6 @@ def _song_to_attrs(song) -> dict[str, str]:
     return attrs
 
 
-# ---------------------------------------------------------------------------
-# GraphVisualizer
-# ---------------------------------------------------------------------------
-
 class GraphVisualizer:
     """
     Embeds an interactive NetworkX/matplotlib graph into a tk.Frame.
@@ -126,7 +120,7 @@ class GraphVisualizer:
     ----------
     parent_frame : tk.Frame
         The Tkinter frame to embed everything into.
-    graph : Graph
+    _graph : graph.Graph
         An already-loaded Graph object from graph.py.
         The caller loads the pickle; this class just uses the graph.
     sample_size : int
@@ -135,43 +129,41 @@ class GraphVisualizer:
         Called with (song_name: str, attrs: dict) whenever the user clicks a node.
         Use this hook to update an info panel elsewhere in the UI.
     """
+    parent_frame: tk.Frame
+    _graph: graph.Graph
+    sample_size: int
+    on_song_click: Callable | None
 
-    def __init__(
-        self,
-        parent_frame: tk.Frame,
-        graph,
-        sample_size: int = 500,
-        on_song_click: Optional[Callable[[str, dict], None]] = None,
-    ) -> None:
-        self.parent_frame   = parent_frame
-        self._graph         = graph
-        self.sample_size    = sample_size
-        self.on_song_click  = on_song_click
+    # MORE INSTANCE ATTRIBUTES
 
-        # Internal state
-        self._nx_graph      = None   # networkx subgraph
-        self._pos           = {}     # {node_name: (x, y)}
-        self._sample_names  = []     # ordered list of song names in current sample
-        self._scatter       = None   # the PathCollection from ax.scatter
-        self._annotation    = None   # floating info box
-        self._node_colors   = []     # parallel list to _sample_names
-        self._node_sizes    = []     # parallel list to _sample_names
-        self._highlighted   = set()  # names currently highlighted as recommended
-        self._seeds         = set()  # names currently marked as seeds
-        self._default_xlim  = None
-        self._default_ylim  = None
+    def __init__(self, parent_frame: tk.Frame, song_graph: graph.Graph, sample_size: int = 500,
+                 on_song_click: Optional[Callable[[str, dict], None]] = None) -> None:
+        self.parent_frame = parent_frame
+        self._graph = song_graph
+        self.sample_size = sample_size
+        self.on_song_click = on_song_click
+
+        self._nx_graph = None   # networkx subgraph
+        self._pos = {}     # {node_name: (x, y)}
+        self._sample_names = []     # ordered list of song names in current sample
+        self._scatter = None   # the PathCollection from ax.scatter
+        self._annotation = None   # floating info box
+        self._node_colors = []     # parallel list to _sample_names
+        self._node_sizes = []     # parallel list to _sample_names
+        self._highlighted = set()  # names currently highlighted as recommended
+        self._seeds = set()  # names currently marked as seeds
+        self._default_xlim = None
+        self._default_ylim = None
 
         # Build the widget tree inside parent_frame
         self.frame = tk.Frame(parent_frame, bg=BG_COLOR)
         self._build_ui()
 
-        # Sample songs and draw — no loading needed, graph is already here
+        # Sample songs and draw (no loading needed, graph is already here)
         self._sample_and_build()
         self._draw()
 
-    # ------------------------------------------------------------------
-    # UI construction
-    # ------------------------------------------------------------------
+    # UI CONSTRUCTION
 
     def _build_ui(self) -> None:
         """Create matplotlib figure + toolbar + info panel inside self.frame."""
@@ -570,7 +562,7 @@ class GraphVisualizer:
 # ---------------------------------------------------------------------------
 # Standalone test — run `python graph_viz.py` to see it in action
 # ---------------------------------------------------------------------------
-
+"""
 if __name__ == "__main__":
     import sys
     # import pickle
@@ -588,7 +580,7 @@ if __name__ == "__main__":
     root.title("Music Graph Visualizer — Standalone Test")
     root.configure(bg=BG_COLOR)
     root.geometry("1200x720")
-    """
+    #
     # ---- Load the graph (pickle handled here, not inside GraphVisualizer) ----
     status = tk.Label(
         root, text="Loading graph from pickle…",
@@ -608,7 +600,7 @@ if __name__ == "__main__":
         )
         root.mainloop()
         sys.exit(1)
-    """
+    #
 
     # ---- Build the visualizer ----
     container = tk.Frame(root, bg=BG_COLOR)
@@ -670,3 +662,4 @@ if __name__ == "__main__":
               command=viz.clear_highlights, **style_btn).pack(side="left", padx=4)
 
     root.mainloop()
+"""
