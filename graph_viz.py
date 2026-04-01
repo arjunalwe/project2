@@ -166,23 +166,26 @@ class GraphVisualizer:
     # UI CONSTRUCTION
 
     def _build_ui(self) -> None:
-        """Create matplotlib figure + toolbar + info panel inside self.frame."""
-        # --- Matplotlib figure ---
+        """
+        Create matplotlib Figure (window), navigation toolbar, info panel, legend, and reset button in self.frame
+        """
+        # Matplotlib Figure (the whole window area) and an Axes (the drawable region in the Figure)
         self._fig, self._ax = plt.subplots(figsize=(9, 6), facecolor=BG_COLOR)
         self._ax.set_facecolor(AXES_BG_COLOR)
         self._ax.axis("off")
 
+        # Add Matplotlib Figure to Tkinter Canvas
         self._canvas = FigureCanvasTkAgg(self._fig, master=self.frame)
         canvas_widget = self._canvas.get_tk_widget()
         canvas_widget.configure(bg=BG_COLOR, highlightthickness=0)
 
-        # NavigationToolbar gives pan + zoom for free
+        # Navigation Toolbar (with pan and zoom)
         toolbar_frame = tk.Frame(self.frame, bg="#1a1a1a")
         self._toolbar = NavigationToolbar2Tk(self._canvas, toolbar_frame)
         self._toolbar.configure(bg="#1a1a1a")
         self._toolbar.update()
 
-        # --- Info panel (shown when a node is clicked) ---
+        # Info panel (shows a song's attributes when a node is clicked)
         self._info_frame = tk.Frame(self.frame, bg="#1a1a2e", bd=0)
         self._info_title = tk.Label(
             self._info_frame, text="Click a node to see song details",
@@ -199,7 +202,7 @@ class GraphVisualizer:
         )
         self._info_text.pack(fill="both", expand=True)
 
-        # --- Legend ---
+        # Legend (what genre each colour represents)
         legend_frame = tk.Frame(self.frame, bg=BG_COLOR)
         for genre, color in GENRE_COLORS.items():
             dot = tk.Label(legend_frame, text="●", fg=color, bg=BG_COLOR,
@@ -219,7 +222,7 @@ class GraphVisualizer:
         tk.Label(legend_frame, text="Recommended", fg="#aaaaaa", bg=BG_COLOR,
                  font=("Arial", 8)).pack(side="left", padx=(0, 6))
 
-        # --- Reset button ---
+        # Reset button
         reset_btn = tk.Button(
             self.frame, text="⟳  Reset View", command=self.reset_view,
             bg="#222244", fg="#aaaaff", font=("Courier New", 9),
@@ -227,7 +230,7 @@ class GraphVisualizer:
             activebackground="#333366", activeforeground="#ffffff"
         )
 
-        # --- Layout ---
+        # Full Layout
         toolbar_frame.pack(side="top", fill="x")
         legend_frame.pack(side="top", fill="x", padx=4, pady=2)
         reset_btn.pack(side="top", anchor="e", padx=6, pady=2)
@@ -239,8 +242,8 @@ class GraphVisualizer:
 
     def _sample_and_build(self) -> None:
         """
-        Randomly sample songs and build a NetworkX subgraph from them.
-        Only edges where BOTH endpoints are in the sample are included.
+        Randomly pick self.sample_size songs, build a NetworkX subgraph from them,
+        and compute node positions using spring layout
         """
         all_names = list(self._graph._songs.keys())
         n = min(self.sample_size, len(all_names))
@@ -259,8 +262,7 @@ class GraphVisualizer:
 
         self._nx_graph = G
 
-        # Compute layout once — cached for the lifetime of this visualizer
-        print("[graph_viz] Computing spring layout … (one-time cost)")
+        # Compute the coordinates of each node/song using NetworkX
         self._pos = nx.spring_layout(
             G,
             weight="weight",
@@ -268,34 +270,39 @@ class GraphVisualizer:
             iterations=60,
             seed=42
         )
-        print("[graph_viz] Layout done.")
 
-        # Initialise colours and sizes
+        # Initialize colours and sizes
         self._reset_colors_and_sizes()
 
     def _reset_colors_and_sizes(self) -> None:
-        """Set default colours (by genre) and sizes for all nodes."""
+        """
+        Set each node its colour and size (by genre, seed, or highlighted)
+        """
         self._node_colors = []
-        self._node_sizes  = []
+        self._node_sizes = []
         for name in self._sample_names:
-            song  = self._graph._songs[name]
+            song = self._graph._songs[name]
             color = GENRE_COLORS.get(song.genre, DEFAULT_NODE_COLOR)
+
             if name in self._seeds:
                 color = SEED_COLOR
+
             if name in self._highlighted:
                 color = HIGHLIGHT_COLOR
+
             self._node_colors.append(color)
+
             size = NODE_SIZE_DEFAULT
             if name in self._seeds or name in self._highlighted:
                 size = NODE_SIZE_HIGHLIGHT
+
             self._node_sizes.append(size)
 
-    # ------------------------------------------------------------------
-    # Drawing
-    # ------------------------------------------------------------------
-
     def _draw(self) -> None:
-        """Full redraw of the graph on the matplotlib axes."""
+        """
+        Fullly redraw the graph on the Matplotlib Axes
+        """
+        # Clear everything
         self._ax.cla()
         self._ax.set_facecolor(AXES_BG_COLOR)
         self._ax.axis("off")
@@ -313,9 +320,9 @@ class GraphVisualizer:
         self._ax.plot(edge_x, edge_y, color=EDGE_COLOR,
                       linewidth=0.7, alpha=0.8, zorder=1)
 
-        # Draw nodes as a scatter (picker=True enables click events)
-        xs = [self._pos[n][0] for n in self._sample_names]
-        ys = [self._pos[n][1] for n in self._sample_names]
+        # Draw nodes/songs using the NetworkX coordinates
+        xs = [self._pos[name][0] for name in self._sample_names]
+        ys = [self._pos[name][1] for name in self._sample_names]
 
         self._scatter = self._ax.scatter(
             xs, ys,
@@ -334,41 +341,45 @@ class GraphVisualizer:
         self._default_xlim = self._ax.get_xlim()
         self._default_ylim = self._ax.get_ylim()
 
+        # Redraw the Tkinter Canvas that the Matplotlib Figure is on
         self._canvas.draw_idle()
 
     def _redraw_colors(self) -> None:
-        """Update node colours/sizes without recomputing layout (fast)."""
+        """
+        Update node colours and sizes without redrawing the whole graph
+        """
         self._reset_colors_and_sizes()
         if self._scatter is not None:
             self._scatter.set_facecolor(self._node_colors)
             self._scatter.set_sizes(self._node_sizes)
         self._canvas.draw_idle()
 
-    # ------------------------------------------------------------------
-    # Interactivity
-    # ------------------------------------------------------------------
-
     def _on_pick(self, event) -> None:
-        """Fired when the user clicks on a node."""
+        """
+        Update the info panel and display the floating label when the user clicks on a node
+        """
         if event.artist is not self._scatter:
             return
-        ind = event.ind[0]  # index of the clicked node
-        song_name = self._sample_names[ind]
-        song      = self._graph._songs[song_name]
-        attrs     = _song_to_attrs(song)
+
+        index = event.ind[0]  # index of the clicked node
+        song_name = self._sample_names[index]
+        song = self._graph._songs[song_name]
+        attrs = _song_to_attrs(song)
 
         # Update the info panel
         self._update_info_panel(song_name, attrs)
 
-        # Show a floating annotation on the graph
-        self._show_annotation(song_name, ind)
+        # Show a floating label on the graph
+        self._show_annotation(song_name, index)
 
-        # Fire external callback if provided
-        if self.on_song_click:
+        # Run any additional stuff
+        if self.on_song_click is not None:
             self.on_song_click(song_name, attrs)
 
     def _update_info_panel(self, song_name: str, attrs: dict) -> None:
-        """Populate the right-side info panel with this song's attributes."""
+        """
+        Display a song's attributes into the info panel
+        """
         self._info_title.configure(text=f"♪  {song_name}")
         self._info_text.configure(state="normal")
         self._info_text.delete("1.0", "end")
@@ -377,15 +388,18 @@ class GraphVisualizer:
         self._info_text.configure(state="disabled")
 
     def _show_annotation(self, song_name: str, node_index: int) -> None:
-        """Draw a floating label near the clicked node."""
-        if self._annotation:
+        """
+        Draw a floating label near the clicked node that displays the song's name and artist
+        """
+        if self._annotation is not None:
             self._annotation.remove()
             self._annotation = None
 
         x, y = self._pos[song_name]
-        song  = self._graph._songs[song_name]
-        text  = f"{song_name}\n{song.artist}"
+        song = self._graph._songs[song_name]
+        text = f"{song_name}\n{song.artist}"
 
+        # Create the floating label
         self._annotation = self._ax.annotate(
             text,
             xy=(x, y),
@@ -400,36 +414,22 @@ class GraphVisualizer:
         )
         self._canvas.draw_idle()
 
-    # ------------------------------------------------------------------
-    # Public API — called by the main UI
-    # ------------------------------------------------------------------
+    # PUBLIC FUNCTIONS
 
-    def highlight_songs(
-        self,
-        recommended: list[str],
-        seed_songs: Optional[list[str]] = None,
-    ) -> None:
+    def highlight_songs(self, recommended: list[str], seed_songs: Optional[list[str]] = None) -> None:
         """
-        Colour recommended songs gold and seed songs red-orange.
-        Songs not in the current sample are silently ignored.
-
-        Parameters
-        ----------
-        recommended : list[str]
-            Song names returned by the recommendation algorithm.
-        seed_songs : list[str], optional
-            The user's input seed songs.
+        Colour nodes gold for songs in recommended and red-orange for songs in seed_songs
+        Swap in any missing recommended songs if not in the current sample
         """
         sample_set = set(self._sample_names)
 
-        self._highlighted = {n for n in recommended if n in sample_set}
-        self._seeds       = set()
-        if seed_songs:
-            self._seeds   = {n for n in seed_songs if n in sample_set}
+        self._highlighted = {name for name in recommended if name in sample_set}
+        self._seeds = set()
+        if seed_songs is not None:
+            self._seeds = {name for name in seed_songs if name in sample_set}
 
-        # If some recommended songs aren't in the current sample, swap in
-        # a portion of them so they become visible.
-        missing = [n for n in recommended if n not in sample_set]
+        # If some recommended songs aren't in the current sample, swap in a portion of them so they become visible
+        missing = [name for name in recommended if name not in sample_set]
         if missing:
             self._inject_songs(missing)
 
@@ -437,37 +437,39 @@ class GraphVisualizer:
 
     def _inject_songs(self, names: list[str]) -> None:
         """
-        Add songs that aren't currently in the sample so they can be shown.
-        Replaces a random non-highlighted, non-seed portion of the sample.
+        Swap songs into the current sample by replacing non-important nodes, then redraw
         """
         replaceable = [
-            n for n in self._sample_names
-            if n not in self._highlighted and n not in self._seeds
+            name for name in self._sample_names
+            if name not in self._highlighted and name not in self._seeds
         ]
         to_remove = replaceable[: len(names)]
         for old, new in zip(to_remove, names):
-            idx = self._sample_names.index(old)
-            self._sample_names[idx] = new
+            index = self._sample_names.index(old)
+
+            # Add new node + edges to sample
+            self._sample_names[index] = new
             self._nx_graph.remove_node(old)
             if old in self._pos:
                 del self._pos[old]
 
-            # Add new node + edges to sample
             self._nx_graph.add_node(new)
             new_song = self._graph._songs[new]
-            # Place it near one of its neighbours that's already visible
+
+            # Place the new song near one of its neighbours that's already visible
             placed = False
             for nb_name in new_song.neighbours:
                 if nb_name in self._pos:
                     nx_pt, ny_pt = self._pos[nb_name]
                     self._pos[new] = (
-                        nx_pt + random.uniform(-0.05, 0.05),
-                        ny_pt + random.uniform(-0.05, 0.05),
+                        nx_pt + random.uniform(-0.05, 0.05),    # shift x slightly left or right
+                        ny_pt + random.uniform(-0.05, 0.05),    # shift y slightly up or down
                     )
                     placed = True
                     break
+
             if not placed:
-                self._pos[new] = (random.uniform(-1, 1), random.uniform(-1, 1))
+                self._pos[new] = (random.uniform(-1, 1), random.uniform(-1, 1))  # Places the node somewhere random
 
             for nb_name, dist in new_song.neighbours.items():
                 if nb_name in set(self._sample_names):
@@ -477,17 +479,9 @@ class GraphVisualizer:
 
     def focus_on_song(self, song_name: str, zoom_radius: float = 0.15) -> None:
         """
-        Smoothly zoom and centre the view on the given song's node.
-
-        Parameters
-        ----------
-        song_name : str
-            The song to focus on. Must be in the current sample.
-        zoom_radius : float
-            Half-width/height of the zoomed viewport (in graph coordinate units).
+        Zoom and centre the view on a specific node by an amount of zoom_radius
         """
-        if song_name not in self._pos:
-            print(f"[graph_viz] '{song_name}' is not in the current sample.")
+        if song_name not in self._pos:  # song_name is not in the current sample, so don't zoom
             return
 
         x, y = self._pos[song_name]
@@ -515,41 +509,47 @@ class GraphVisualizer:
         self.parent_frame.after(1500, _remove_ring)
 
     def reset_view(self) -> None:
-        """Reset the viewport to show the full graph."""
-        if self._default_xlim and self._default_ylim:
+        """
+        Restore the original zoom and pan and remove any floating annotation labels
+        """
+        if self._default_xlim is not None and self._default_ylim is not None:
             self._ax.set_xlim(self._default_xlim)
             self._ax.set_ylim(self._default_ylim)
-        if self._annotation:
+
+        if self._annotation is not None:
             self._annotation.remove()
             self._annotation = None
+
         self._canvas.draw_idle()
 
     def clear_highlights(self) -> None:
-        """Remove all recommendation/seed highlighting."""
+        """
+        Remove all gold and red-orange highlighting, changing nodes back to their original genre colours
+        """
         self._highlighted.clear()
         self._seeds.clear()
         self._redraw_colors()
 
+    """
     def get_song_attributes(self, song_name: str) -> Optional[dict]:
-        """
+        
         Return the display-ready attribute dict for a song by name.
         Returns None if the song is not in the loaded graph.
-        """
+        
         song = self._graph._songs.get(song_name)
         if song is None:
             return None
         return _song_to_attrs(song)
+    """
 
     def search_songs(self, query: str, max_results: int = 10) -> list[str]:
         """
-        Simple case-insensitive search across song names and artist names.
-        Returns a list of matching song names (up to max_results).
-
-        Useful for wiring up the search box in the main UI.
+        Return up to max_results song names whose title or artist contains the query string (case-insensitive)
         """
         q = query.lower().strip()
         if not q:
             return []
+
         results = []
         for name, song in self._graph._songs.items():
             if q in name.lower() or q in song.artist.lower():
