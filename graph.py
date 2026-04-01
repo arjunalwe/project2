@@ -162,8 +162,6 @@ class Graph:
             next(reader, None)
 
             for song_data in reader:
-                song_data.pop(0)
-                song_data.pop(2)
                 song_data[2] = float(song_data[2]) / 100
 
                 original_genre = song_data[4]
@@ -325,12 +323,5 @@ def make_graph() -> Graph:
     return graph
 
 
-if __name__ == "__main__":
-    graph = make_graph()
-    song = graph.get_song("I'm A Stranger Here - Five Man Electrical Band")
-
-    recs = graph.recommend([song], 10)
-
-    for song in recs:
-        print(song[1].name)
-
+if __name__ == '__main__':
+    graph = Graph("spotify_20k.csv", 0.7)
