@@ -5,30 +5,7 @@ from tkinter import messagebox
 import graph
 from graph_viz import GraphVisualizer, BG_COLOR
 
-
-def get_recommendations(music_graph, seed_names, max_results):
-    """
-    Recommend songs that are neighbours of any seed song.
-    Closer neighbours (smaller distance) are preferred.
-    """
-    best_distance = {}
-
-    for seed in seed_names:
-        if seed not in music_graph._songs:
-            continue
-        song = music_graph._songs[seed]
-        for neighbour_name, dist in song.neighbours.items():
-            if neighbour_name in seed_names:
-                continue
-            if neighbour_name not in best_distance or dist < best_distance[neighbour_name]:
-                best_distance[neighbour_name] = dist
-
-    sorted_names = sorted(best_distance.keys(), key=lambda n: best_distance[n])
-    return sorted_names[:max_results]
-
-
 def main():
-    # helps pickle.load find Graph / _Song if loading an old pickle
     sys.modules["__main__"].Graph = graph.Graph
     sys.modules["__main__"]._Song = graph._Song
 
@@ -161,7 +138,7 @@ def main():
             messagebox.showerror("Recommendations", "Enter a positive whole number.")
             return
 
-        recs = get_recommendations(music_graph, seeds, n)
+        recs = music_graph.recommend([*seeds], n)
         if not recs:
             messagebox.showinfo(
                 "Recommendations",
@@ -169,13 +146,14 @@ def main():
             )
             return
 
-        viz.highlight_songs(recs, seed_songs=list(seeds))
+        rec_names = [rec.name for rec in recs]
+        viz.highlight_songs(rec_names, seed_songs=list(seeds))
         if recs:
-            viz.focus_on_song(recs[0])
+            viz.focus_on_song(rec_names[0])
 
     tk.Button(btn_row, text="Add as seed", command=add_seed).pack(side="left", padx=(20, 4))
     tk.Button(btn_row, text="Remove seed", command=remove_seed).pack(side="left", padx=4)
-    tk.Button(btn_row, text="Get recommendations", command=do_recommendations).pack(side="left", padx=12)
+    tk.Button(btn_row, text="Get Recommendations", command=do_recommendations).pack(side="left", padx=12)
     tk.Button(btn_row, text="Clear graph highlights", command=viz.clear_highlights).pack(side="left", padx=4)
 
     root.mainloop()
