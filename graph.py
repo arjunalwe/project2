@@ -381,3 +381,10 @@ def make_graph() -> Graph:
 
 if __name__ == '__main__':
     make_graph()
+
+    import python_ta
+    python_ta.check_all(config={
+        'extra-imports': [],  # the names (strs) of imported modules
+        'allowed-io': [],  # the names (strs) of functions that call print/open/input
+        'max-line-length': 120
+    })
