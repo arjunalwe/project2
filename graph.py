@@ -327,7 +327,7 @@ def make_graph() -> Graph:
 
 if __name__ == "__main__":
     graph = make_graph()
-    song = graph.get_song("Life In a Glasshouse - Radiohead")
+    song = graph.get_song("I'm A Stranger Here - Five Man Electrical Band")
 
     recs = graph.recommend([song], 10)
 

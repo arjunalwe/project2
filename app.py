@@ -8,7 +8,7 @@ from graph_viz import GraphVisualizer, BG_COLOR
 
 def get_recommendations(music_graph, seed_names, max_results):
     """
-    recommend songs that are neighbours of any seed song.
+    Recommend songs that are neighbours of any seed song.
     Closer neighbours (smaller distance) are preferred.
     """
     best_distance = {}
@@ -142,7 +142,7 @@ def main():
 
     viz = GraphVisualizer(
         parent_frame=graph_frame,
-        graph=music_graph,
+        song_graph=music_graph,
         sample_size=500,
         on_song_click=on_song_click,
     )
