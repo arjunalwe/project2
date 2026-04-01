@@ -148,6 +148,8 @@ class Graph:
         if build_edges:
             self._make_connections()
             self._save_state()
+        else:
+            self._load_save()
 
     def _load_songs(self, dataset: str):
         years = []
@@ -218,7 +220,7 @@ class Graph:
                         binary_data = struct.pack('iif', i, name_to_idx[neighbor], dist)
                         f.write(binary_data)
 
-    def load_save(self):
+    def _load_save(self):
         song_names = list(self._songs.keys())
         edge_size = struct.calcsize('iif')
 
@@ -230,7 +232,11 @@ class Graph:
                 self._songs[u_name].neighbours[v_name] = dist
                 self._songs[v_name].neighbours[u_name] = dist
 
-    def add_song(self, song: _Song) -> None:
+    def add_song(self, artist, name, popularity, year, genre, dance, energy, key, loud, mode, speech, acoustic,
+                 instrument, live, valence, tempo, duration, time_signature) -> None:
+
+        song = _Song(artist, name, popularity, year, genre, dance, energy, key, loud, mode, speech, acoustic,
+                     instrument, live, valence, tempo, duration, time_signature)
         self._process_song_data(song)
 
         threshold_sq = self.threshold ** 2
@@ -245,83 +251,133 @@ class Graph:
 
         self._songs[song.name] = song
 
-    def recommend(self, songs: list[_Song], num_req: int = 10) -> list[tuple[float, _Song]]:
+    def recommend(self, songs: list[str], num_req: int = 10) -> list[_Song]:
         if not songs:
             return []
 
         num_seeds = len(songs)
-
-        genres = [song.genre for song in songs]
+        seed_songs = [self.get_song(song) for song in songs if self.get_song(song)]
+        genres = [song.genre for song in seed_songs]
         most_common_genre = Counter(genres).most_common(1)[0][0]
 
-        seed_features = [song.get_features() for song in songs]
-
+        seed_features = [song.get_features() for song in seed_songs]
         avg_features = [sum(col) / num_seeds for col in zip(*seed_features)]
 
-        avg_song = _Song(
-            "Master", "Centroid",
-            avg_features[0],
-            avg_features[1],
-            most_common_genre,
-            *avg_features[2:]
-        )
+        avg_song = _Song("Arjun", "Average Song", avg_features[0], avg_features[1],
+                         most_common_genre, *avg_features[2:])
 
-        queue = deque([(seed.name, 0) for seed in songs])
-        visited = set(seed.name for seed in songs)
+        discovered = {}
 
-        candidates = []
-        curr_depth = 0
-        threshold_sq = self.threshold ** 2
+        queue = deque([(seed.name, 0) for seed in seed_songs])
 
         while queue:
             curr_name, depth = queue.popleft()
 
-            if depth > curr_depth:
-                if len(candidates) >= num_req:
-                    break
-                curr_depth = depth
+            if depth >= 2:
+                continue
 
             curr_song = self._songs[curr_name]
 
             for neighbor_name in curr_song.neighbours:
-                if neighbor_name not in visited:
-                    visited.add(neighbor_name)
+                if neighbor_name in songs:
+                    continue
+
+                if neighbor_name not in discovered:
+                    discovered[neighbor_name] = {'depth': depth + 1, 'count': 1}
                     queue.append((neighbor_name, depth + 1))
+                else:
+                    discovered[neighbor_name]['count'] += 1
 
-                    neighbor_song = self._songs[neighbor_name]
+        candidates = []
+        threshold_sq = self.threshold ** 2
 
-                    dist_sq = _calculate_song_distance_sq(avg_song, neighbor_song)
+        for neighbor_name, stats in discovered.items():
+            neighbor_song = self._songs[neighbor_name]
+            dist_sq = _calculate_song_distance_sq(avg_song, neighbor_song)
 
-                    if dist_sq < threshold_sq:
-                        candidates.append((dist_sq, neighbor_song))
+            if dist_sq < threshold_sq:
+                repeats = (stats['count'] - 1) * 0.15
+                final_score = dist_sq - repeats
+
+                candidates.append((final_score, neighbor_song))
 
         candidates.sort(key=lambda x: x[0])
 
-        top_matches = []
-        for dist_sq, song in candidates[:num_req]:
-            top_matches.append((math.sqrt(dist_sq), song))
-
-        return top_matches
+        return [song for score, song in candidates[:num_req]]
 
     def get_song(self, name: str) -> _Song | None:
         return self._songs.get(name)
 
+    def search_songs(self, query: str, limit: int = 20) -> list[str]:
+        found = []
+        q = query.lower()
+        for name, song in self._songs.items():
+            if q in name.lower() or q in song.artist.lower():
+                found.append(name)
+            if len(found) >= limit:
+                break
+        return found
+
+    def get_all_song_names(self) -> list[str]:
+        return list(self._songs.keys())
+
+    def get_stats(self, song_name: str) -> dict[str, str]:
+        song = self.get_song(song_name)
+        if not song:
+            return {}
+
+        def denormalize(norm_val: float, val_range: list[float]) -> float:
+            if not val_range or val_range[1] == val_range[0]:
+                return val_range[0] if val_range else 0.0
+            return (norm_val * (val_range[1] - val_range[0])) + val_range[0]
+
+        year = round(denormalize(song.year, self._year_range))
+        key = round(denormalize(song.key, self._key_range))
+        loud = denormalize(song.loud, self._loudness_range)
+        tempo = denormalize(song.tempo, self._tempo_range)
+        duration_ms = denormalize(song.duration, self._duration_range)
+        time_sig = round(denormalize(song.time_signature, self._time_sig_range))
+
+        seconds = int((duration_ms / 1000) % 60)
+        minutes = int((duration_ms / (1000 * 60)) % 60)
+        duration_formatted = f"{minutes}:{seconds:02d}"
+
+        popularity_raw = round(song.popularity * 100)
+
+        return {
+            "Artist": song.artist,
+            "Genre": song.genre,
+            "Release Year": str(year),
+            "Popularity": f"{popularity_raw}/100",
+            "Danceability": f"{song.dance:.2f}",
+            "Energy": f"{song.energy:.2f}",
+            "Key": str(key),
+            "Loudness": f"{loud:.1f} dB",
+            "Mode": "Major" if song.mode >= 0.5 else "Minor",
+            "Speechiness": f"{song.speech:.2f}",
+            "Acousticness": f"{song.acoustic:.2f}",
+            "Instrumentalness": f"{song.instrument:.2f}",
+            "Liveness": f"{song.live:.2f}",
+            "Valence (Mood)": f"{song.valence:.2f}",
+            "Tempo": f"{tempo:.0f} BPM",
+            "Duration": duration_formatted,
+            "Time Signature": f"{time_sig}/4"
+        }
+
 
 def make_graph() -> Graph:
-    dataset_file = "spotify_15k.csv"
-    threshold = 0.75
+    dataset_file = "spotify_19k.csv"
+    threshold = 0.7
 
     if os.path.exists("graph.bin"):
-        print("Found save")
+        print("Found save file!")
         graph = Graph(dataset_file, threshold, build_edges=False)
-        graph.load_save()
     else:
-        print("Binary file not found. Generating new graph.")
+        print("Save file not found. Generating new graph...")
         graph = Graph(dataset_file, threshold)
-        print("Graph generated and saved!")
 
     return graph
 
 
 if __name__ == '__main__':
-    graph = Graph("spotify_20k.csv", 0.7)
+    make_graph()
