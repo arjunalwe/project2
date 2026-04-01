@@ -247,12 +247,13 @@ class Graph:
 
         self._songs[song.name] = song
 
-    def recommend(self, songs: list[_Song], num_req: int = 10) -> list[tuple[float, _Song]]:
+    def recommend(self, songs: list[str], num_req: int = 10) -> list[_Song]:
         if not songs:
             return []
 
         num_seeds = len(songs)
 
+        songs = [self.get_song(song) for song in songs]
         genres = [song.genre for song in songs]
         most_common_genre = Counter(genres).most_common(1)[0][0]
 
@@ -295,13 +296,13 @@ class Graph:
                     dist_sq = _calculate_song_distance_sq(avg_song, neighbor_song)
 
                     if dist_sq < threshold_sq:
-                        candidates.append((dist_sq, neighbor_song))
+                        candidates.append((math.sqrt(dist_sq), neighbor_song))
 
         candidates.sort(key=lambda x: x[0])
 
         top_matches = []
-        for dist_sq, song in candidates[:num_req]:
-            top_matches.append((math.sqrt(dist_sq), song))
+        for song in candidates[:num_req]:
+            top_matches.append(song[1])
 
         return top_matches
 
@@ -323,14 +324,3 @@ def make_graph() -> Graph:
         print("Graph generated and saved!")
 
     return graph
-
-
-if __name__ == "__main__":
-    graph = make_graph()
-    song = graph.get_song("I'm A Stranger Here - Five Man Electrical Band")
-
-    recs = graph.recommend([song], 10)
-
-    for song in recs:
-        print(song[1].name)
-
