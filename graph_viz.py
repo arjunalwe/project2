@@ -312,21 +312,21 @@ class GraphVisualizer:
         self._sample_names = random.sample(all_names, n)
         sample_set = set(self._sample_names)
 
-        G = nx.Graph()
-        G.add_nodes_from(self._sample_names)
+        g = nx.Graph()
+        g.add_nodes_from(self._sample_names)
 
         for name in self._sample_names:
             song = self._graph.get_song(name)
             for neighbour_name, dist in song.neighbours.items():
                 if neighbour_name in sample_set:
-                    if not G.has_edge(name, neighbour_name):
-                        G.add_edge(name, neighbour_name, weight=1.0 - dist)
+                    if not g.has_edge(name, neighbour_name):
+                        g.add_edge(name, neighbour_name, weight=1.0 - dist)
 
-        self._nx_graph = G
+        self._nx_graph = g
 
         # Compute the coordinates of each node/song using NetworkX
         self._pos = nx.spring_layout(
-            G, weight="weight", k=1.2 / (n ** 0.5), iterations=60, seed=42
+            g, weight="weight", k=1.2 / (n ** 0.5), iterations=60, seed=42
         )
 
         # Initialize colours and sizes
@@ -336,7 +336,6 @@ class GraphVisualizer:
         """
         Set each node its colour and size (by genre, and seed or highlighted)
         """
-
         self._node_colors = []
         self._node_sizes = []
         for name in self._sample_names:
