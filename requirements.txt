@@ -1,8 +1,2 @@
-# CSC111 Winter 2026: Python libraries we'll be using
-
-# Testing and code checking
-python-ta
-
-# Graphics and data visualization
-networkx
-matplotlib
+networkx~=3.5
+matplotlib~=3.10.7

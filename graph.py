@@ -6,10 +6,10 @@ Module Description
 This module contains the _Song and Graph classes used to represent songs
 and the similarities between other songs as a weighted graph.
 It handles loading song data from a CSV file, loading the graph's edges
-using a binary file., normalizing audio attributes, and computing Euclidean
+using a binary file, normalizing audio attributes, and computing Euclidean
 distances between songs. It also provides the recommendation algorithm,
 which uses a BFS (Breadth First Search) traversal and an average feature vector across
-seed songs to find and rank the most similar songs
+seed songs to find and rank the most similar songs.
 
 Copyright and Usage Information
 ===============================
@@ -17,13 +17,12 @@ This file is provided solely for the personal and private use of the
 authors listed below. All forms of distribution of this code, whether
 as given or with any changes, are expressly prohibited.
 
-This file is Copyright (c)  Reuben Kurian Mathew, Arjun Nilesh Alwe, Ritvik Aggarwal
+This file is Copyright (c) 2026 Reuben Kurian Mathew, Arjun Nilesh Alwe, Ritvik Aggarwal
 """
 
 from __future__ import annotations
 import csv
 from collections import deque, Counter
-from typing import Any
 import math
 import itertools
 import struct
@@ -61,11 +60,53 @@ PARENT_GENRE_MAPPING = {
 }
 
 
-def normalize(value, r):
+def normalize(value: float, r: list[float]) -> float:
+    """Return the normalized value (between 0.0 and 1.0) of a given float based on the provided [min, max] range.
+    Returns 0.0 if the range represents a single value (min == max) to avoid division by zero.
+    """
     return (float(value) - r[0]) / (r[1] - r[0]) if r[1] != r[0] else 0.0
 
 
 class _Song:
+    """A track with audio features and connections to mathematically similar songs.
+
+    Instance Attributes:
+        - artist: The name of the artist.
+        - name: The title of the song combined with the artist name.
+        - popularity: A normalized popularity score.
+        - year: A normalized release year.
+        - genre: The parent genre of the track.
+        - dance: Danceability score.
+        - energy: Energy score.
+        - key: Normalized musical key.
+        - loud: Normalized loudness.
+        - mode: Modality (major/minor).
+        - speech: Speechiness score.
+        - acoustic: Acousticness score.
+        - instrument: Instrumentalness score.
+        - live: Liveness score.
+        - valence: Valence (mood) score.
+        - tempo: Normalized tempo.
+        - duration: Normalized duration.
+        - time_signature: Normalized time signature.
+        - neighbours: A dictionary mapping neighbour song names to their Euclidean distance.
+
+    Representation Invariants:
+        - 0.0 <= self.popularity <= 1.0
+        - 0.0 <= self.dance <= 1.0
+        - 0.0 <= self.energy <= 1.0
+        - 0.0 <= self.key <= 1.0
+        - 0.0 <= self.loud <= 1.0
+        - 0.0 <= self.mode <= 1.0
+        - 0.0 <= self.speech <= 1.0
+        - 0.0 <= self.acoustic <= 1.0
+        - 0.0 <= self.instrument <= 1.0
+        - 0.0 <= self.live <= 1.0
+        - 0.0 <= self.valence <= 1.0
+        - 0.0 <= self.tempo <= 1.0
+        - 0.0 <= self.duration <= 1.0
+        - 0.0 <= self.time_signature <= 1.0
+    """
     artist: str
     name: str
     popularity: float
@@ -86,8 +127,11 @@ class _Song:
     time_signature: float
     neighbours: dict[str, float]
 
-    def __init__(self, artist, name, popularity, year, genre, dance, energy, key, loud, mode, speech, acoustic,
-                 instrument, live, valence, tempo, duration, time_signature):
+    def __init__(self, artist: str, name: str, popularity: float, year: float, genre: str, dance: float,
+                 energy: float, key: float, loud: float, mode: float, speech: float, acoustic: float,
+                 instrument: float, live: float, valence: float, tempo: float, duration: float,
+                 time_signature: float) -> None:
+        """Initialize a new _Song object with its corresponding audio features."""
         self.name = f"{name} - {artist}"
         self.artist = artist
         self.popularity = float(popularity)
@@ -109,6 +153,7 @@ class _Song:
         self.neighbours = {}
 
     def get_features(self) -> list[float]:
+        """Return a list of all normalized mathematical audio features for this song."""
         return [
             self.popularity, self.year, self.dance, self.energy, self.key, self.loud,
             self.mode, self.speech, self.acoustic, self.instrument,
@@ -117,29 +162,51 @@ class _Song:
 
 
 def _calculate_song_distance_sq(song1: _Song, song2: _Song) -> float:
+    """Return the squared Euclidean distance between two songs based on their audio features.
+    Songs of different genres incur a flat penalty to their distance score.
+    """
     genre_dist_sq = 0.0 if song1.genre == song2.genre else 1.0
     return (
-            (song1.popularity - song2.popularity) ** 2 +
-            (song1.year - song2.year) ** 2 +
-            (song1.key - song2.key) ** 2 +
-            (song1.loud - song2.loud) ** 2 +
-            (song1.tempo - song2.tempo) ** 2 +
-            (song1.duration - song2.duration) ** 2 +
-            (song1.time_signature - song2.time_signature) ** 2 +
-            (song1.dance - song2.dance) ** 2 +
-            (song1.energy - song2.energy) ** 2 +
-            (song1.mode - song2.mode) ** 2 +
-            (song1.speech - song2.speech) ** 2 +
-            (song1.acoustic - song2.acoustic) ** 2 +
-            (song1.instrument - song2.instrument) ** 2 +
-            (song1.live - song2.live) ** 2 +
-            (song1.valence - song2.valence) ** 2 +
-            genre_dist_sq
+            (song1.popularity - song2.popularity) ** 2
+            + (song1.year - song2.year) ** 2
+            + (song1.key - song2.key) ** 2
+            + (song1.loud - song2.loud) ** 2
+            + (song1.tempo - song2.tempo) ** 2
+            + (song1.duration - song2.duration) ** 2
+            + (song1.time_signature - song2.time_signature) ** 2
+            + (song1.dance - song2.dance) ** 2
+            + (song1.energy - song2.energy) ** 2
+            + (song1.mode - song2.mode) ** 2
+            + (song1.speech - song2.speech) ** 2
+            + (song1.acoustic - song2.acoustic) ** 2
+            + (song1.instrument - song2.instrument) ** 2
+            + (song1.live - song2.live) ** 2
+            + (song1.valence - song2.valence) ** 2
+            + genre_dist_sq
     )
 
 
 class Graph:
-    _songs: dict[Any, _Song]
+    """A graph representing a network of songs connected by their acoustic similarities.
+
+    Instance Attributes:
+        - genres: A set of all genres found in the dataset.
+        - parent_genres: A list of standard parent genres used for classification.
+        - threshold: The maximum Euclidean distance allowed for two songs to be connected.
+
+    Private Instance Attributes:
+        - _songs: A dictionary mapping song names to their corresponding _Song objects.
+        - _year_range: The [min, max] range of release years in the dataset.
+        - _key_range: The [min, max] range of keys in the dataset.
+        - _loudness_range: The [min, max] range of loudness in the dataset.
+        - _tempo_range: The [min, max] range of tempos in the dataset.
+        - _duration_range: The [min, max] range of durations in the dataset.
+        - _time_sig_range: The [min, max] range of time signatures in the dataset.
+
+    Representation Invariants:
+        - self.threshold > 0.0
+    """
+    _songs: dict[str, _Song]
     _year_range: list[float]
     _key_range: list[float]
     _loudness_range: list[float]
@@ -150,7 +217,11 @@ class Graph:
     parent_genres: list[str]
     threshold: float
 
-    def __init__(self, dataset: str, threshold: float, build_edges: bool = True):
+    def __init__(self, dataset: str, threshold: float, build_edges: bool = True) -> None:
+        """Initialize the Graph with a dataset of songs and a similarity threshold.
+        If build_edges is True, it will calculate O(n^2) edges from scratch and save them to a binary file.
+        If False, it will attempt to load pre-calculated edges from a binary file to save time.
+        """
         self._songs = {}
         self._year_range = []
         self._key_range = []
@@ -173,7 +244,8 @@ class Graph:
         else:
             self._load_save()
 
-    def _load_songs(self, dataset: str):
+    def _load_songs(self, dataset: str) -> None:
+        """Read song data from the provided CSV file, create _Song objects, and determine normalization ranges."""
         years = []
         keys = []
         louds = []
@@ -186,21 +258,38 @@ class Graph:
             next(reader, None)
 
             for song_data in reader:
-                song_data[2] = float(song_data[2]) / 100
+                artist = song_data[0]
+                name = song_data[1]
+                popularity = float(song_data[2]) / 100.0
+                year = float(song_data[3])
 
                 original_genre = song_data[4]
-                song_data[4] = PARENT_GENRE_MAPPING.get(original_genre, "Mood/Other")
+                genre = PARENT_GENRE_MAPPING.get(original_genre, "Mood/Other")
 
-                new_song = _Song(*song_data)
+                dance = float(song_data[5])
+                energy = float(song_data[6])
+                key = float(song_data[7])
+                loud = float(song_data[8])
+                mode = float(song_data[9])
+                speech = float(song_data[10])
+                acoustic = float(song_data[11])
+                instrument = float(song_data[12])
+                live = float(song_data[13])
+                valence = float(song_data[14])
+                tempo = float(song_data[15])
+                duration = float(song_data[16])
+                time_signature = float(song_data[17])
+
+                new_song = _Song(artist, name, popularity, year, genre, dance, energy, key, loud, mode, speech,
+                                 acoustic, instrument, live, valence, tempo, duration, time_signature)
                 self._songs[new_song.name] = new_song
-                curr_song = self._songs[new_song.name]
 
-                years.append(curr_song.year)
-                keys.append(curr_song.key)
-                louds.append(curr_song.loud)
-                tempos.append(curr_song.tempo)
-                durations.append(curr_song.duration)
-                time_sigs.append(curr_song.time_signature)
+                years.append(year)
+                keys.append(key)
+                louds.append(loud)
+                tempos.append(tempo)
+                durations.append(duration)
+                time_sigs.append(time_signature)
 
         self._year_range = [min(years), max(years)]
         self._key_range = [min(keys), max(keys)]
@@ -209,10 +298,12 @@ class Graph:
         self._duration_range = [min(durations), max(durations)]
         self._time_sig_range = [min(time_sigs), max(time_sigs)]
 
-        for song in self._songs.values():
-            self._process_song_data(song)
+        for song_obj in self._songs.values():
+            self._process_song_data(song_obj)
 
-    def _make_connections(self):
+    def _make_connections(self) -> None:
+        """Calculate the Euclidean distance between all pairs of songs
+        and create an edge if it is below the threshold."""
         threshold_sq = self.threshold ** 2
 
         for song1, song2 in itertools.combinations(list(self._songs.values()), 2):
@@ -222,7 +313,8 @@ class Graph:
                 song1.neighbours[song2.name] = exact_dist
                 song2.neighbours[song1.name] = exact_dist
 
-    def _process_song_data(self, song: _Song):
+    def _process_song_data(self, song: _Song) -> None:
+        """Normalize the scale-dependent audio features of a song so they fall between 0.0 and 1.0."""
         song.year = normalize(song.year, self._year_range)
         song.key = normalize(song.key, self._key_range)
         song.loud = normalize(song.loud, self._loudness_range)
@@ -231,65 +323,74 @@ class Graph:
         song.time_signature = normalize(song.time_signature, self._time_sig_range)
 
     def _save_state(self) -> None:
+        """Serialize the graph's edges and save them to a binary file using the struct module to compress size."""
         song_names = list(self._songs.keys())
-        name_to_idx = {name: i for i, name in enumerate(song_names)}
+        name_to_idx = {s_name: idx for idx, s_name in enumerate(song_names)}
 
         with open("graph.bin", "wb") as f:
-            for i, name in enumerate(song_names):
-                song = self._songs[name]
+            for idx, s_name in enumerate(song_names):
+                song = self._songs[s_name]
                 for neighbor, dist in song.neighbours.items():
-                    if name < neighbor:
-                        binary_data = struct.pack('iif', i, name_to_idx[neighbor], dist)
+                    if s_name < neighbor:
+                        binary_data = struct.pack('iif', idx, name_to_idx[neighbor], dist)
                         f.write(binary_data)
 
-    def _load_save(self):
+    def _load_save(self) -> None:
+        """Load pre-computed edges from a binary file to rapidly reconstruct the graph."""
         song_names = list(self._songs.keys())
         edge_size = struct.calcsize('iif')
 
         with open("graph.bin", "rb") as f:
-            while chunk := f.read(edge_size):
+            chunk = f.read(edge_size)
+            while chunk:
                 u_idx, v_idx, dist = struct.unpack('iif', chunk)
                 u_name, v_name = song_names[u_idx], song_names[v_idx]
 
                 self._songs[u_name].neighbours[v_name] = dist
                 self._songs[v_name].neighbours[u_name] = dist
+                chunk = f.read(edge_size)
 
-    def add_song(self, artist, name, popularity, year, genre, dance, energy, key, loud, mode, speech, acoustic,
-                 instrument, live, valence, tempo, duration, time_signature) -> None:
-
+    def add_song(self, artist: str, name: str, popularity: float, year: float, genre: str, dance: float,
+                 energy: float, key: float, loud: float, mode: float, speech: float, acoustic: float,
+                 instrument: float, live: float, valence: float, tempo: float, duration: float,
+                 time_signature: float) -> None:
+        """Create a new song, normalize its features, and connect it to its nearest neighbors in the existing graph."""
         song = _Song(artist, name, popularity, year, genre, dance, energy, key, loud, mode, speech, acoustic,
                      instrument, live, valence, tempo, duration, time_signature)
         self._process_song_data(song)
 
         threshold_sq = self.threshold ** 2
 
-        for i in self._songs.values():
-            dist_sq = _calculate_song_distance_sq(song, i)
+        for existing_song in self._songs.values():
+            dist_sq = _calculate_song_distance_sq(song, existing_song)
 
             if dist_sq < threshold_sq:
                 exact_dist = math.sqrt(dist_sq)
-                song.neighbours[i.name] = exact_dist
-                i.neighbours[song.name] = exact_dist
+                song.neighbours[existing_song.name] = exact_dist
+                existing_song.neighbours[song.name] = exact_dist
 
         self._songs[song.name] = song
 
     def recommend(self, songs: list[str], num_req: int = 10) -> list[_Song]:
+        """Perform a Breadth-First Search starting from the provided seed songs to find recommendations.
+        Calculates a centroid 'average' song based on the seeds, traverses out to depth 2, and ranks candidates
+        by their distance to the centroid, rewarding songs that act as co-citations between multiple seeds.
+        """
         if not songs:
             return []
 
         num_seeds = len(songs)
-        seed_songs = [song for name in songs if (song := self.get_song(name)) is not None]
-        genres = [song.genre for song in seed_songs]
+        seed_songs = [s_obj for n in songs if (s_obj := self.get_song(n)) is not None]
+        genres = [s_obj.genre for s_obj in seed_songs]
         most_common_genre = Counter(genres).most_common(1)[0][0]
 
-        seed_features = [song.get_features() for song in seed_songs]
+        seed_features = [s_obj.get_features() for s_obj in seed_songs]
         avg_features = [sum(col) / num_seeds for col in zip(*seed_features)]
 
-        avg_song = _Song("Arjun", "Average Song", avg_features[0], avg_features[1],
+        avg_song = _Song("User", "Average Song", avg_features[0], avg_features[1],
                          most_common_genre, *avg_features[2:])
 
         discovered = {}
-
         queue = deque([(seed.name, 0) for seed in seed_songs])
 
         while queue:
@@ -320,17 +421,18 @@ class Graph:
             if dist_sq < threshold_sq:
                 repeats = (stats['count'] - 1) * 0.15
                 final_score = dist_sq - repeats
-
                 candidates.append((final_score, neighbor_song))
 
         candidates.sort(key=lambda x: x[0])
 
-        return [song for score, song in candidates[:num_req]]
+        return [s_obj for score, s_obj in candidates[:num_req]]
 
     def get_song(self, name: str) -> _Song | None:
+        """Return the _Song object corresponding to the given name, or None if it does not exist."""
         return self._songs.get(name)
 
     def search_songs(self, query: str, limit: int = 20) -> list[str]:
+        """Search the graph for songs whose title or artist matches the query string (case-insensitive)."""
         found = []
         q = query.lower()
         for name, song in self._songs.items():
@@ -341,14 +443,17 @@ class Graph:
         return found
 
     def get_all_song_names(self) -> list[str]:
+        """Return a list of the names of all songs currently loaded in the graph."""
         return list(self._songs.keys())
 
     def get_stats(self, song_name: str) -> dict[str, str]:
+        """Reverse normalization math to return clean, formatted, human-readable statistics for a specific song."""
         song = self.get_song(song_name)
         if not song:
             return {}
 
         def denormalize(norm_val: float, val_range: list[float]) -> float:
+            """Helper function to reverse the 0.0 to 1.0 normalization process using the original bounds."""
             if not val_range or val_range[1] == val_range[0]:
                 return val_range[0] if val_range else 0.0
             return (norm_val * (val_range[1] - val_range[0])) + val_range[0]
@@ -388,6 +493,7 @@ class Graph:
 
 
 def make_graph() -> Graph:
+    """Initialize and return the main Graph object by loading the dataset and determining if edges need to be built."""
     dataset_file = "spotify_19k.csv"
     threshold = 0.7
 
@@ -402,9 +508,12 @@ def make_graph() -> Graph:
 
 
 if __name__ == '__main__':
-    make_graph()
+    import doctest
+
+    doctest.testmod()
 
     import python_ta
+
     python_ta.check_all(config={
         'extra-imports': [
             'csv', 'collections', 'typing', 'math', 'itertools', 'struct', 'os'
@@ -412,5 +521,11 @@ if __name__ == '__main__':
         'allowed-io': [
             '_load_songs', '_save_state', '_load_save', 'make_graph'
         ],
-        'max-line-length': 120
+        'max-line-length': 120,
+        'disable': [
+            'E1136',
+            'too-many-instance-attributes',
+            'too-many-arguments',
+            'too-many-locals'
+        ]
     })
