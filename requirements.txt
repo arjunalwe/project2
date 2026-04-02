@@ -1,2 +1,6 @@
-networkx~=3.5
-matplotlib~=3.10.7
+# CSC111 Project 2 - MatchMyMusic
+# External Libraries
+
+networkx
+matplotlib
+python-ta
