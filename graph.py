@@ -167,22 +167,22 @@ def _calculate_song_distance_sq(song1: _Song, song2: _Song) -> float:
     """
     genre_dist_sq = 0.0 if song1.genre == song2.genre else 1.0
     return (
-            (song1.popularity - song2.popularity) ** 2
-            + (song1.year - song2.year) ** 2
-            + (song1.key - song2.key) ** 2
-            + (song1.loud - song2.loud) ** 2
-            + (song1.tempo - song2.tempo) ** 2
-            + (song1.duration - song2.duration) ** 2
-            + (song1.time_signature - song2.time_signature) ** 2
-            + (song1.dance - song2.dance) ** 2
-            + (song1.energy - song2.energy) ** 2
-            + (song1.mode - song2.mode) ** 2
-            + (song1.speech - song2.speech) ** 2
-            + (song1.acoustic - song2.acoustic) ** 2
-            + (song1.instrument - song2.instrument) ** 2
-            + (song1.live - song2.live) ** 2
-            + (song1.valence - song2.valence) ** 2
-            + genre_dist_sq
+        (song1.popularity - song2.popularity) ** 2
+        + (song1.year - song2.year) ** 2
+        + (song1.key - song2.key) ** 2
+        + (song1.loud - song2.loud) ** 2
+        + (song1.tempo - song2.tempo) ** 2
+        + (song1.duration - song2.duration) ** 2
+        + (song1.time_signature - song2.time_signature) ** 2
+        + (song1.dance - song2.dance) ** 2
+        + (song1.energy - song2.energy) ** 2
+        + (song1.mode - song2.mode) ** 2
+        + (song1.speech - song2.speech) ** 2
+        + (song1.acoustic - song2.acoustic) ** 2
+        + (song1.instrument - song2.instrument) ** 2
+        + (song1.live - song2.live) ** 2
+        + (song1.valence - song2.valence) ** 2
+        + genre_dist_sq
     )
 
 
@@ -202,6 +202,7 @@ class Graph:
         - _tempo_range: The [min, max] range of tempos in the dataset.
         - _duration_range: The [min, max] range of durations in the dataset.
         - _time_sig_range: The [min, max] range of time signatures in the dataset.
+        - _bin_file: The name of the file to save/load the compiled graph edges from.
 
     Representation Invariants:
         - self.threshold > 0.0
@@ -213,11 +214,12 @@ class Graph:
     _tempo_range: list[float]
     _duration_range: list[float]
     _time_sig_range: list[float]
+    _bin_file: str
     genres: set[str]
     parent_genres: list[str]
     threshold: float
 
-    def __init__(self, dataset: str, threshold: float, build_edges: bool = True) -> None:
+    def __init__(self, dataset: str, threshold: float, build_edges: bool = True, bin_file: str = "graph.bin") -> None:
         """Initialize the Graph with a dataset of songs and a similarity threshold.
         If build_edges is True, it will calculate O(n^2) edges from scratch and save them to a binary file.
         If False, it will attempt to load pre-calculated edges from a binary file to save time.
@@ -231,6 +233,7 @@ class Graph:
         self._time_sig_range = []
         self.genres = set()
         self.threshold = threshold
+        self._bin_file = bin_file
         self.parent_genres = [
             "Pop", "Rock", "Electronic/Dance", "Hip-Hop/Soul", "Metal/Punk",
             "Jazz/Blues", "Classical/Acoustic", "Folk/Country", "World/Regional", "Mood/Other"
@@ -327,7 +330,7 @@ class Graph:
         song_names = list(self._songs.keys())
         name_to_idx = {s_name: idx for idx, s_name in enumerate(song_names)}
 
-        with open("graph.bin", "wb") as f:
+        with open(self._bin_file, "wb") as f:
             for idx, s_name in enumerate(song_names):
                 song = self._songs[s_name]
                 for neighbor, dist in song.neighbours.items():
@@ -340,7 +343,7 @@ class Graph:
         song_names = list(self._songs.keys())
         edge_size = struct.calcsize('iif')
 
-        with open("graph.bin", "rb") as f:
+        with open(self._bin_file, "rb") as f:
             chunk = f.read(edge_size)
             while chunk:
                 u_idx, v_idx, dist = struct.unpack('iif', chunk)
@@ -504,16 +507,22 @@ def make_graph() -> Graph:
         print("Save file not found. Generating new graph...")
         graph = Graph(dataset_file, threshold)
 
+    """ COMMENT THE ABOVE SECTION AND UNCOMMENT THIS SECTION FOR THE DATA GENERATION TEST.
+    dataset_file = "spotify_1k.csv"
+    threshold = 0.7
+
+    print("Save file not found. Generating new graph...")
+    graph = Graph(dataset_file, threshold, bin_file="graph_1k.bin")
+    """
+
     return graph
 
 
 if __name__ == '__main__':
     import doctest
-
     doctest.testmod()
 
     import python_ta
-
     python_ta.check_all(config={
         'extra-imports': [
             'csv', 'collections', 'typing', 'math', 'itertools', 'struct', 'os'
