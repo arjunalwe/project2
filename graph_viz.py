@@ -34,7 +34,6 @@ from matplotlib.text import Annotation
 import math
 
 
-
 GENRE_COLORS: dict[str, str] = {
     "Pop": "#E91E8C",
     "Rock": "#FF6B35",
@@ -595,7 +594,7 @@ class GraphVisualizer:
 
     def _fallback_layout(self, names: list[str]) -> dict[str, tuple[float, float]]:
         """
-        Build a deterministic circular layout without relying on NumPy.
+        Build a deterministic circular layout without relying on NumPy
         """
         if not names:
             return {}
