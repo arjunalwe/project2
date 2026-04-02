@@ -48,6 +48,35 @@ TEXT_FG_SECONDARY = "#aaaaaa"
 
 
 class AddSongQuiz(tk.Toplevel):
+    """
+    A popup window that lets the user manually add a song that wasn't found in the dataset.
+    The user fills in the song name, artist, release year, and genre, then rates
+    danceability, energy, and mood on sliders from 1 to 10. The song then gets added
+    to the graph and automatically placed in the seed songs list.
+
+    Instance Attributes:
+    - graph: The loaded music graph (used to add the new song and compute its connections)
+    - viz: The graph visualizer (used to inject and focus on the new song)
+    - seeds_box: The seed songs listbox in the main UI (the new song gets inserted here)
+    - name_var: The song name typed by the user
+    - artist_var: The artist name typed by the user
+    - year_var: The release year typed by the user
+    - genre_var: The genre selected by the user from the dropdown
+    - dance_slider: Slider for danceability, from 1 (not likely to dance to this song) to 10 (will dance to this song)
+    - energy_slider: Slider for energy, from 1 (calm) to 10 (intense)
+    - mood_slider: Slider for mood/valence, from 1 (sad/dark) to 10 (happy/upbeat)
+    """
+    graph: graph.Graph
+    viz: GraphVisualizer
+    seeds_box: tk.Listbox
+    name_var: tk.StringVar
+    artist_var: tk.StringVar
+    year_var: tk.StringVar
+    genre_var: tk.StringVar
+    dance_slider: tk.Scale
+    energy_slider: tk.Scale
+    mood_slider: tk.Scale
+
     def __init__(self, parent, graph_ref, viz_ref, seeds_box_ref, initial_query):
         super().__init__(parent)
         self.graph = graph_ref
@@ -80,7 +109,10 @@ class AddSongQuiz(tk.Toplevel):
                   "Jazz/Blues", "Classical/Acoustic", "Folk/Country", "World/Regional", "Mood/Other"]
         tk.OptionMenu(self, self.genre_var, *genres).pack(fill="x", padx=30)
 
-        def make_slider(label_text):
+        def make_slider(label_text) -> tk.Scale:
+            """
+            Return a labelled horizontal slider from 1 to 10, starting at 5
+            """
             tk.Label(self, text=label_text, fg=TEXT_FG_SECONDARY, bg=BG_COLOR).pack(anchor="w", padx=30, pady=(20, 0))
             slider = tk.Scale(self, from_=1, to=10, orient="horizontal", bg=BG_COLOR, fg=TEXT_FG_PRIMARY,
                               highlightthickness=0, length=350)
@@ -96,7 +128,10 @@ class AddSongQuiz(tk.Toplevel):
                   font=(FONT_FAMILY, FONT_SIZE_NORMAL, "bold"), bg="#27AE60", fg="white",
                   padx=10, pady=5).pack(pady=30)
 
-    def submit_song(self):
+    def submit_song(self) -> None:
+        """
+        Create a new song from the input fields and sliders, and add it to the graph and seed list
+        """
         name = self.name_var.get().strip()
         artist = self.artist_var.get().strip()
         year = self.year_var.get().strip()
@@ -129,6 +164,9 @@ class AddSongQuiz(tk.Toplevel):
 
 
 def main():
+    """
+    Build the full Tkinter UI, include the graph visulization, and start the app
+    """
     matplotlib.use("TkAgg")
     music_graph = graph.make_graph()
 
@@ -203,6 +241,10 @@ def main():
     search_results = []
 
     def run_search():
+        """
+        Search the graph for songs matching the user's typed query and show them in the results listbox
+        If nothing is found, ask the user if they want to manually add the song instead
+        """
         results_box.delete(0, tk.END)
         search_results.clear()
         query = search_var.get().strip()
@@ -225,6 +267,10 @@ def main():
             results_box.insert(tk.END, name)
 
     def add_seed():
+        """
+        Move the selected song from the search results listbox into the seed songs listbox
+        Show a message if no song is selected or the song is already a seed
+        """
         sel = results_box.curselection()
         if not sel:
             messagebox.showinfo("Seeds", "Select a song in Search results first.")
@@ -237,6 +283,10 @@ def main():
         seeds_box.insert(tk.END, song_name)
 
     def remove_seed():
+        """
+        Remove the selected song from the seed songs listbox
+        Show a message if nothing is selected
+        """
         sel = seeds_box.curselection()
         if not sel:
             messagebox.showinfo("Seeds", "Select a seed to remove.")
@@ -244,6 +294,11 @@ def main():
         seeds_box.delete(sel[0])
 
     def do_recommendations():
+        """
+        Run the recommendation algorithm using the current seed songs and requested count.
+        Display the recoomended songs in the recommended tracks listbox, highlight the
+        recommendations on the graph, and zoom to the top recommendation
+        """
         seeds = list(seeds_box.get(0, tk.END))
         if not seeds:
             messagebox.showinfo("Recommendations", "Add at least one seed song.")
@@ -277,6 +332,9 @@ def main():
             viz.focus_on_song(rec_names[0])
 
     def clear_all():
+        """
+        Clear all graph highlights and empty the recommended tracks listbox
+        """
         viz.clear_highlights()
         recs_box.delete(0, tk.END)
 
@@ -316,6 +374,10 @@ def main():
     viz.frame.pack(fill="both", expand=True)
 
     def on_listbox_click(event):
+        """
+        Show the clicked song's attributes in the graph info panel
+        If the click came from the recommended tracks listbox, also zoom to that song's node
+        """
         widget = event.widget
         sel = widget.curselection()
 
