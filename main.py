@@ -22,6 +22,8 @@ This file is Copyright (c)  Reuben Kurian Mathew, Arjun Nilesh Alwe, Ritvik Agga
 import tkinter as tk
 from tkinter import messagebox
 
+import matplotlib
+
 import graph
 from graph_viz import GraphVisualizer, BG_COLOR
 
@@ -127,6 +129,7 @@ class AddSongQuiz(tk.Toplevel):
 
 
 def main():
+    matplotlib.use("TkAgg")
     music_graph = graph.make_graph()
 
     root = tk.Tk()
