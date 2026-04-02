@@ -1,8 +1,6 @@
 # CSC111 Winter 2026: Python libraries we'll be using
 
 # Testing and code checking
-hypothesis
-pytest
 python-ta
 
 # Graphics and data visualization

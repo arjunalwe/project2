@@ -1,3 +1,25 @@
+"""
+CSC111 Winter 2026 Course Project: MatchMyMusic (Graph)
+
+Module Description
+==================
+This module contains the _Song and Graph classes used to represent songs
+and the similarities between other songs as a weighted graph.
+It handles loading song data from a CSV file, loading the graph's edges
+using a binary file., normalizing audio attributes, and computing Euclidean
+distances between songs. It also provides the recommendation algorithm,
+which uses a BFS (Breadth First Search) traversal and an average feature vector across
+seed songs to find and rank the most similar songs
+
+Copyright and Usage Information
+===============================
+This file is provided solely for the personal and private use of the
+authors listed below. All forms of distribution of this code, whether
+as given or with any changes, are expressly prohibited.
+
+This file is Copyright (c) 2026 Reuben Kurian Mathew, Arjun Nilesh Alwe, Ritvik Aggarwal
+"""
+
 from __future__ import annotations
 import csv
 from collections import deque, Counter

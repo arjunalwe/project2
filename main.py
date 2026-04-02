@@ -1,4 +1,25 @@
-import sys
+"""
+CSC111 Winter 2026 Course Project: MatchMyMusic (Main Application)
+
+Module Description
+==================
+This module contains the main application for MatchMyMusic. It builds the
+Tkinter user interface, which includes a song search bar, a seed song list
+(list of all the user's songs), and a recommended tracks list. It also
+contains the AddSongQuiz class, which allows users to manually add a song
+that is not in the dataset by entering its attributes through a popup window.
+When the user requests recommendations, this module calls the graph's recommendation
+algorithm and displays the results as highlighted nodes in the graph visualization
+and as a list of track names.
+
+Copyright and Usage Information
+===============================
+This file is provided solely for the personal and private use of the
+authors listed below. All forms of distribution of this code, whether
+as given or with any changes, are expressly prohibited.
+
+This file is Copyright (c) 2026 Reuben Kurian Mathew, Arjun Nilesh Alwe, Ritvik Aggarwal
+"""
 import tkinter as tk
 from tkinter import messagebox
 
