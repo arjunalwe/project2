@@ -15,7 +15,7 @@ This file is provided solely for the personal and private use of the
 authors listed below. All forms of distribution of this code, whether
 as given or with any changes, are expressly prohibited.
 
-This file is Copyright (c) 2026 Reuben Kurian Mathew, Arjun Nilesh Alwe, Ritvik Aggarwal
+This file is Copyright (c)   Reuben Kurian Mathew, Arjun Nilesh Alwe, Ritvik Aggarwal
 """
 
 from __future__ import (annotations)
@@ -25,14 +25,17 @@ import tkinter as tk
 from typing import Callable, Optional
 from matplotlib.backend_bases import MouseEvent, PickEvent
 import networkx as nx
-import matplotlib
+#import matplotlib
+#matplotlib.use("TkAgg")
+
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.collections import PathCollection
 from matplotlib.text import Annotation
+import math
 
-matplotlib.use("TkAgg")
+
 
 GENRE_COLORS: dict[str, str] = {
     "Pop": "#E91E8C",
@@ -110,7 +113,7 @@ class GraphVisualizer:
     _graph: graph.Graph
     sample_size: int
     on_song_click: Callable | None
-    _nx_graph: nx.Graph | None
+    _nx_graph: nx.Graph
     _pos: dict[str, tuple[float, float]]
     _sample_names: list[str]
     _scatter: PathCollection | None
@@ -136,7 +139,7 @@ class GraphVisualizer:
         self.sample_size = sample_size
         self.on_song_click = on_song_click
 
-        self._nx_graph = None
+        self._nx_graph = nx.Graph()
         self._pos = {}
         self._sample_names = []
         self._scatter = None
@@ -289,18 +292,28 @@ class GraphVisualizer:
         """
         Move the graph view while the user right-click drags to pan
         """
-        if self._is_panning and event.inaxes == self._ax:
-            dx = event.x - self._pan_start_x
-            dy = event.y - self._pan_start_y
+        if not self._is_panning or event.inaxes != self._ax:
+            return
 
-            x0, y0 = self._ax.transData.inverted().transform((0, 0))
-            x1, y1 = self._ax.transData.inverted().transform((dx, dy))
-            data_dx = x1 - x0
-            data_dy = y1 - y0
+        if (
+                self._pan_start_x is None
+                or self._pan_start_y is None
+                or self._pan_start_xlim is None
+                or self._pan_start_ylim is None
+        ):
+            return
 
-            self._ax.set_xlim(self._pan_start_xlim[0] - data_dx, self._pan_start_xlim[1] - data_dx)
-            self._ax.set_ylim(self._pan_start_ylim[0] - data_dy, self._pan_start_ylim[1] - data_dy)
-            self._canvas.draw_idle()
+        dx = event.x - self._pan_start_x
+        dy = event.y - self._pan_start_y
+
+        x0, y0 = self._ax.transData.inverted().transform((0, 0))
+        x1, y1 = self._ax.transData.inverted().transform((dx, dy))
+        data_dx = x1 - x0
+        data_dy = y1 - y0
+
+        self._ax.set_xlim(self._pan_start_xlim[0] - data_dx, self._pan_start_xlim[1] - data_dx)
+        self._ax.set_ylim(self._pan_start_ylim[0] - data_dy, self._pan_start_ylim[1] - data_dy)
+        self._canvas.draw_idle()
 
     def _sample_and_build(self) -> None:
         """
@@ -312,30 +325,32 @@ class GraphVisualizer:
         self._sample_names = random.sample(all_names, n)
         sample_set = set(self._sample_names)
 
-        g = nx.Graph()
-        g.add_nodes_from(self._sample_names)
+        G = nx.Graph()
+        G.add_nodes_from(self._sample_names)
 
         for name in self._sample_names:
             song = self._graph.get_song(name)
             for neighbour_name, dist in song.neighbours.items():
                 if neighbour_name in sample_set:
-                    if not g.has_edge(name, neighbour_name):
-                        g.add_edge(name, neighbour_name, weight=1.0 - dist)
+                    if not G.has_edge(name, neighbour_name):
+                        G.add_edge(name, neighbour_name, weight=1.0 - dist)
 
-        self._nx_graph = g
+        self._nx_graph = G
 
-        # Compute the coordinates of each node/song using NetworkX
-        self._pos = nx.spring_layout(
-            g, weight="weight", k=1.2 / (n ** 0.5), iterations=60, seed=42
-        )
+        try:
+            self._pos = nx.spring_layout(
+                G, weight="weight", k=1.2 / (n ** 0.5), iterations=60, seed=42
+            )
+        except ImportError:
+            self._pos = self._fallback_layout(self._sample_names)
 
-        # Initialize colours and sizes
         self._reset_colors_and_sizes()
 
     def _reset_colors_and_sizes(self) -> None:
         """
         Set each node its colour and size (by genre, and seed or highlighted)
         """
+
         self._node_colors = []
         self._node_sizes = []
         for name in self._sample_names:
@@ -580,11 +595,30 @@ class GraphVisualizer:
         self._remove_all_rings()
         self._redraw_colors()
 
+    def _fallback_layout(self, names: list[str]) -> dict[str, tuple[float, float]]:
+        """
+        Build a deterministic circular layout without relying on NumPy.
+        """
+        if not names:
+            return {}
+
+        total = len(names)
+        pos = {}
+
+        for i, name in enumerate(sorted(names)):
+            angle = (2 * math.pi * i) / total
+            pos[name] = (math.cos(angle), math.sin(angle))
+
+        return pos
+
 
 if __name__ == '__main__':
     import python_ta
     python_ta.check_all(config={
-        'extra-imports': [],  # the names (strs) of imported modules
+        'extra-imports': [
+            'math', 'graph', 'random', 'tkinter', 'networkx', 'matplotlib.backend_bases', 'matplotlib.pyplot',
+            'matplotlib.patheffects', 'matplotlib.backends.backend_tkagg', 'matplotlib.collections', 'matplotlib.text'
+        ],
         'allowed-io': [],  # the names (strs) of functions that call print/open/input
         'max-line-length': 120
     })

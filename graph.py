@@ -17,7 +17,7 @@ This file is provided solely for the personal and private use of the
 authors listed below. All forms of distribution of this code, whether
 as given or with any changes, are expressly prohibited.
 
-This file is Copyright (c) 2026 Reuben Kurian Mathew, Arjun Nilesh Alwe, Ritvik Aggarwal
+This file is Copyright (c)  Reuben Kurian Mathew, Arjun Nilesh Alwe, Ritvik Aggarwal
 """
 
 from __future__ import annotations
@@ -278,7 +278,7 @@ class Graph:
             return []
 
         num_seeds = len(songs)
-        seed_songs = [self.get_song(song) for song in songs if self.get_song(song)]
+        seed_songs = [song for name in songs if (song := self.get_song(name)) is not None]
         genres = [song.genre for song in seed_songs]
         most_common_genre = Counter(genres).most_common(1)[0][0]
 
@@ -406,7 +406,11 @@ if __name__ == '__main__':
 
     import python_ta
     python_ta.check_all(config={
-        'extra-imports': [],  # the names (strs) of imported modules
-        'allowed-io': [],  # the names (strs) of functions that call print/open/input
+        'extra-imports': [
+            'csv', 'collections', 'typing', 'math', 'itertools', 'struct', 'os'
+        ],
+        'allowed-io': [
+            '_load_songs', '_save_state', '_load_save', 'make_graph'
+        ],
         'max-line-length': 120
     })

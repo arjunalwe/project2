@@ -14,11 +14,10 @@ and as a list of track names.
 
 Copyright and Usage Information
 ===============================
-This file is provided solely for the personal and private use of the
-authors listed below. All forms of distribution of this code, whether
+This file is provided solely for the personal and private use. All forms of distribution of this code, whether
 as given or with any changes, are expressly prohibited.
 
-This file is Copyright (c) 2026 Reuben Kurian Mathew, Arjun Nilesh Alwe, Ritvik Aggarwal
+This file is Copyright (c)  Reuben Kurian Mathew, Arjun Nilesh Alwe, Ritvik Aggarwal
 """
 import tkinter as tk
 from tkinter import messagebox
@@ -307,9 +306,10 @@ def main():
     viz = GraphVisualizer(
         parent_frame=graph_frame,
         song_graph=music_graph,
-        sample_size=500,
-        on_song_click=lambda song_name, attrs: viz.focus_on_song(song_name)
+        sample_size=500
     )
+
+    viz.on_song_click = lambda song_name, attrs: viz.focus_on_song(song_name)
     viz.frame.pack(fill="both", expand=True)
 
     def on_listbox_click(event):
@@ -334,8 +334,8 @@ if __name__ == "__main__":
     import python_ta
 
     python_ta.check_all(config={
-        'extra-imports': [],  # the names (strs) of imported modules
-        'allowed-io': [],  # the names (strs) of functions that call print/open/input
+        'extra-imports': ['tkinter', 'graph', 'graph_viz'],
+        'allowed-io': [],
         'max-line-length': 120
     })
 
