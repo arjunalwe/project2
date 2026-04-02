@@ -14,8 +14,6 @@ Copyright and Usage Information
 This file is provided solely for the personal and private use of the
 authors listed below. All forms of distribution of this code, whether
 as given or with any changes, are expressly prohibited.
-
-This file is Copyright (c) 2026 Reuben Kurian Mathew, Arjun Nilesh Alwe, Ritvik Aggarwal
 """
 
 from __future__ import annotations
@@ -226,28 +224,25 @@ class GraphVisualizer:
         if event.xdata is None or event.ydata is None:
             return
 
-        step = max(-1, min(1, event.step))
         base_scale = 1.15
-
-        scale_factor = (1 / base_scale) if step > 0 else base_scale
+        scale_factor = base_scale ** (-event.step)
 
         cur_xlim = self._ax.get_xlim()
         cur_ylim = self._ax.get_ylim()
 
-        if (cur_xlim[1] - cur_xlim[0]) < 0.05 and step > 0:
-            return
-
-        xdata = event.xdata
-        ydata = event.ydata
-
         new_width = (cur_xlim[1] - cur_xlim[0]) * scale_factor
         new_height = (cur_ylim[1] - cur_ylim[0]) * scale_factor
 
-        relx = (cur_xlim[1] - xdata) / (cur_xlim[1] - cur_xlim[0])
-        rely = (cur_ylim[1] - ydata) / (cur_ylim[1] - cur_ylim[0])
+        if new_width < 0.001 or new_height < 0.001:
+            return
 
-        self._ax.set_xlim(xdata - new_width * (1 - relx), xdata + new_width * relx)
-        self._ax.set_ylim(ydata - new_height * (1 - rely), ydata + new_height * rely)
+        xdata, ydata = event.xdata, event.ydata
+
+        relx = (xdata - cur_xlim[0]) / (cur_xlim[1] - cur_xlim[0])
+        rely = (ydata - cur_ylim[0]) / (cur_ylim[1] - cur_ylim[0])
+
+        self._ax.set_xlim(xdata - new_width * relx, xdata + new_width * (1 - relx))
+        self._ax.set_ylim(ydata - new_height * rely, ydata + new_height * (1 - rely))
         self._canvas.draw_idle()
 
     def _on_press(self, event: MouseEvent) -> None:
@@ -269,21 +264,19 @@ class GraphVisualizer:
         if not self._is_panning or event.inaxes != self._ax:
             return
 
-        if (
-                self._pan_start_x is None
-                or self._pan_start_y is None
-                or self._pan_start_xlim is None
-                or self._pan_start_ylim is None
-        ):
+        if (self._pan_start_x is None or self._pan_start_y is None or
+                self._pan_start_xlim is None or self._pan_start_ylim is None):
             return
 
         dx = event.x - self._pan_start_x
         dy = event.y - self._pan_start_y
 
-        x0, y0 = self._ax.transData.inverted().transform((0, 0))
-        x1, y1 = self._ax.transData.inverted().transform((dx, dy))
-        data_dx = x1 - x0
-        data_dy = y1 - y0
+        bbox = self._ax.get_window_extent()
+        data_width = self._pan_start_xlim[1] - self._pan_start_xlim[0]
+        data_height = self._pan_start_ylim[1] - self._pan_start_ylim[0]
+
+        data_dx = dx * (data_width / bbox.width)
+        data_dy = dy * (data_height / bbox.height)
 
         self._ax.set_xlim(self._pan_start_xlim[0] - data_dx, self._pan_start_xlim[1] - data_dx)
         self._ax.set_ylim(self._pan_start_ylim[0] - data_dy, self._pan_start_ylim[1] - data_dy)

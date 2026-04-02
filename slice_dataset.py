@@ -12,8 +12,6 @@ Copyright and Usage Information
 This file is provided solely for the personal and private use of the
 authors listed below. All forms of distribution of this code, whether
 as given or with any changes, are expressly prohibited.
-
-This file is Copyright (c) 2026 Reuben Kurian Mathew, Arjun Nilesh Alwe, Ritvik Aggarwal
 """
 
 import csv

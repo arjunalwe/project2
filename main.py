@@ -14,15 +14,16 @@ and as a list of track names.
 
 Copyright and Usage Information
 ===============================
-This file is provided solely for the personal and private use. All forms of distribution of this code, whether
+This file is provided solely for the personal and private use of the
+authors listed below. All forms of distribution of this code, whether
 as given or with any changes, are expressly prohibited.
-
-This file is Copyright (c)  Reuben Kurian Mathew, Arjun Nilesh Alwe, Ritvik Aggarwal
 """
+
 import tkinter as tk
 from tkinter import messagebox
 
 import matplotlib
+matplotlib.use("TkAgg")
 
 import graph
 from graph_viz import GraphVisualizer, BG_COLOR
@@ -55,16 +56,16 @@ class AddSongQuiz(tk.Toplevel):
     to the graph and automatically placed in the seed songs list.
 
     Instance Attributes:
-    - graph: The loaded music graph (used to add the new song and compute its connections)
-    - viz: The graph visualizer (used to inject and focus on the new song)
-    - seeds_box: The seed songs listbox in the main UI (the new song gets inserted here)
-    - name_var: The song name typed by the user
-    - artist_var: The artist name typed by the user
-    - year_var: The release year typed by the user
-    - genre_var: The genre selected by the user from the dropdown
-    - dance_slider: Slider for danceability, from 1 (not likely to dance to this song) to 10 (will dance to this song)
-    - energy_slider: Slider for energy, from 1 (calm) to 10 (intense)
-    - mood_slider: Slider for mood/valence, from 1 (sad/dark) to 10 (happy/upbeat)
+        - graph: The loaded music graph (used to add the new song and compute its connections).
+        - viz: The graph visualizer (used to inject and focus on the new song).
+        - seeds_box: The seed songs listbox in the main UI (the new song gets inserted here).
+        - name_var: The song name typed by the user.
+        - artist_var: The artist name typed by the user.
+        - year_var: The release year typed by the user.
+        - genre_var: The genre selected by the user from the dropdown.
+        - dance_slider: Slider for danceability, from 1 (slow) to 10 (club anthem).
+        - energy_slider: Slider for energy, from 1 (calm) to 10 (intense).
+        - mood_slider: Slider for mood/valence, from 1 (sad/dark) to 10 (happy/upbeat).
     """
     graph: graph.Graph
     viz: GraphVisualizer
@@ -77,7 +78,9 @@ class AddSongQuiz(tk.Toplevel):
     energy_slider: tk.Scale
     mood_slider: tk.Scale
 
-    def __init__(self, parent, graph_ref, viz_ref, seeds_box_ref, initial_query):
+    def __init__(self, parent: tk.Tk | tk.Frame, graph_ref: graph.Graph, viz_ref: GraphVisualizer,
+                 seeds_box_ref: tk.Listbox, initial_query: str) -> None:
+        """Initialize the popup window and build the user input fields."""
         super().__init__(parent)
         self.graph = graph_ref
         self.viz = viz_ref
@@ -109,29 +112,25 @@ class AddSongQuiz(tk.Toplevel):
                   "Jazz/Blues", "Classical/Acoustic", "Folk/Country", "World/Regional", "Mood/Other"]
         tk.OptionMenu(self, self.genre_var, *genres).pack(fill="x", padx=30)
 
-        def make_slider(label_text) -> tk.Scale:
-            """
-            Return a labelled horizontal slider from 1 to 10, starting at 5
-            """
-            tk.Label(self, text=label_text, fg=TEXT_FG_SECONDARY, bg=BG_COLOR).pack(anchor="w", padx=30, pady=(20, 0))
-            slider = tk.Scale(self, from_=1, to=10, orient="horizontal", bg=BG_COLOR, fg=TEXT_FG_PRIMARY,
-                              highlightthickness=0, length=350)
-            slider.set(5)
-            slider.pack(padx=30)
-            return slider
-
-        self.dance_slider = make_slider("Danceability (1=Slow, 10=Club Anthem):")
-        self.energy_slider = make_slider("Energy (1=Calm, 10=Intense):")
-        self.mood_slider = make_slider("Mood (1=Sad/Dark, 10=Happy/Upbeat):")
+        self.dance_slider = self._make_slider("Danceability (1=Slow, 10=Club Anthem):")
+        self.energy_slider = self._make_slider("Energy (1=Calm, 10=Intense):")
+        self.mood_slider = self._make_slider("Mood (1=Sad/Dark, 10=Happy/Upbeat):")
 
         tk.Button(self, text="Add to Graph & Seeds", command=self.submit_song,
                   font=(FONT_FAMILY, FONT_SIZE_NORMAL, "bold"), bg="#27AE60", fg="white",
                   padx=10, pady=5).pack(pady=30)
 
+    def _make_slider(self, label_text: str) -> tk.Scale:
+        """Helper method to return a labelled horizontal slider from 1 to 10, starting at 5."""
+        tk.Label(self, text=label_text, fg=TEXT_FG_SECONDARY, bg=BG_COLOR).pack(anchor="w", padx=30, pady=(20, 0))
+        slider = tk.Scale(self, from_=1, to=10, orient="horizontal", bg=BG_COLOR, fg=TEXT_FG_PRIMARY,
+                          highlightthickness=0, length=350)
+        slider.set(5)
+        slider.pack(padx=30)
+        return slider
+
     def submit_song(self) -> None:
-        """
-        Create a new song from the input fields and sliders, and add it to the graph and seed list
-        """
+        """Create a new song from the input fields and sliders, and add it to the graph and seed list."""
         name = self.name_var.get().strip()
         artist = self.artist_var.get().strip()
         year = self.year_var.get().strip()
@@ -147,31 +146,30 @@ class AddSongQuiz(tk.Toplevel):
         loudness = -30.0 + (energy * 30.0)
 
         self.graph.add_song(
-            artist=artist, name=name, popularity=0.5, year=year, genre=genre,
+            artist=artist, name=name, popularity=0.5, year=float(year), genre=genre,
             dance=dance, energy=energy, key=5.0, loud=loudness, mode=1.0,
             speech=0.05, acoustic=0.2, instrument=0.0, live=0.1, valence=valence,
             tempo=120.0, duration=200000.0, time_signature=4.0)
-        self.seeds_box.insert(tk.END, name)
-        self.viz.inject_songs([name])
+
+        full_name = f"{name} - {artist}"
+
+        self.seeds_box.insert(tk.END, full_name)
+        self.viz.inject_songs([full_name])
 
         all_seeds = list(self.seeds_box.get(0, tk.END))
         self.viz.highlight_songs([], seed_songs=all_seeds)
-        self.viz.focus_on_song(name)
+        self.viz.focus_on_song(full_name)
 
-        song_name_display = name
         self.destroy()
-        messagebox.showinfo("Success", f"'{song_name_display}' has been added to the graph and your seeds!")
+        messagebox.showinfo("Success", f"'{full_name}' has been added to the graph and your seeds!")
 
 
-def main():
-    """
-    Build the full Tkinter UI, include the graph visulization, and start the app
-    """
-    matplotlib.use("TkAgg")
+def main() -> None:
+    """Build the full Tkinter UI, include the graph visualization, and start the app."""
     music_graph = graph.make_graph()
 
     root = tk.Tk()
-    root.title("Music recommender — graph view")
+    root.title("MatchMyMusic — Graph View")
     root.configure(bg=BG_COLOR)
 
     try:
@@ -240,10 +238,10 @@ def main():
 
     search_results = []
 
-    def run_search():
+    def run_search() -> None:
         """
-        Search the graph for songs matching the user's typed query and show them in the results listbox
-        If nothing is found, ask the user if they want to manually add the song instead
+        Search the graph for songs matching the user's typed query and show them in the results listbox.
+        If nothing is found, ask the user if they want to manually add the song instead.
         """
         results_box.delete(0, tk.END)
         search_results.clear()
@@ -266,10 +264,10 @@ def main():
         for name in found:
             results_box.insert(tk.END, name)
 
-    def add_seed():
+    def add_seed() -> None:
         """
-        Move the selected song from the search results listbox into the seed songs listbox
-        Show a message if no song is selected or the song is already a seed
+        Move the selected song from the search results listbox into the seed songs listbox.
+        Show a message if no song is selected or the song is already a seed.
         """
         sel = results_box.curselection()
         if not sel:
@@ -282,22 +280,19 @@ def main():
             return
         seeds_box.insert(tk.END, song_name)
 
-    def remove_seed():
-        """
-        Remove the selected song from the seed songs listbox
-        Show a message if nothing is selected
-        """
+    def remove_seed() -> None:
+        """Remove the selected song from the seed songs listbox."""
         sel = seeds_box.curselection()
         if not sel:
             messagebox.showinfo("Seeds", "Select a seed to remove.")
             return
         seeds_box.delete(sel[0])
 
-    def do_recommendations():
+    def do_recommendations() -> None:
         """
         Run the recommendation algorithm using the current seed songs and requested count.
-        Display the recoomended songs in the recommended tracks listbox, highlight the
-        recommendations on the graph, and zoom to the top recommendation
+        Display the recommended songs in the recommended tracks listbox, highlight the
+        recommendations on the graph, and zoom to the top recommendation.
         """
         seeds = list(seeds_box.get(0, tk.END))
         if not seeds:
@@ -326,15 +321,12 @@ def main():
             recs_box.insert(tk.END, name)
 
         viz.highlight_songs(rec_names, seed_songs=list(seeds))
+
         if recs:
-            for rec in rec_names:
-                viz.focus_on_song(rec)
             viz.focus_on_song(rec_names[0])
 
-    def clear_all():
-        """
-        Clear all graph highlights and empty the recommended tracks listbox
-        """
+    def clear_all() -> None:
+        """Clear all graph highlights and empty the recommended tracks listbox."""
         viz.clear_highlights()
         recs_box.delete(0, tk.END)
 
@@ -373,10 +365,10 @@ def main():
     viz.on_song_click = lambda song_name, attrs: viz.focus_on_song(song_name)
     viz.frame.pack(fill="both", expand=True)
 
-    def on_listbox_click(event):
+    def on_listbox_click(event: tk.Event) -> None:
         """
-        Show the clicked song's attributes in the graph info panel
-        If the click came from the recommended tracks listbox, also zoom to that song's node
+        Show the clicked song's attributes in the graph info panel.
+        If the click came from the recommended tracks listbox, also zoom to that song's node.
         """
         widget = event.widget
         sel = widget.curselection()
